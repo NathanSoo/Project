@@ -1,0 +1,39 @@
+<ASSEMBLER_INFO>
+ <VERSION>2.2.8</VERSION>
+ <DEVICE>"ATmega2560"</DEVICE>
+ <WORKING_DIR>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\Debug</WORKING_DIR>
+ <INCLUDE_PATH>
+  <DIR>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc</DIR>
+  <DIR>C:\Program Files (x86)\Atmel\Studio\7.0\toolchain\avr8\avrassembler\Include</DIR>
+  <DIR></DIR>
+ </INCLUDE_PATH>
+ <SOURCE_FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</SOURCE_FILE>
+ <INCLUDED_FILES>
+  <FILE>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc</FILE>
+ </INCLUDED_FILES>
+ <OBJECT_FILES>
+  <FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\Debug\Project.obj</FILE>
+ </OBJECT_FILES>
+ <HEX_FILES>
+  <FILE>Project.hex</FILE>
+ </HEX_FILES>
+ <OUTPUT_FILES>
+  <FILE>Project.map</FILE>
+  <FILE>Project.lss</FILE>
+ </OUTPUT_FILES>
+ <LABELS>
+  <INITIALISE_LCD><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>131</LINE></INITIALISE_LCD>
+  <loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>122</LINE></loop>
+  <scan_keypad><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>197</LINE></scan_keypad>
+  <col_loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>214</LINE></col_loop>
+  <push_mask><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>219</LINE></push_mask>
+  <update_delay><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>222</LINE></update_delay>
+  <nextcol><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>247</LINE></nextcol>
+  <row_loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>234</LINE></row_loop>
+  <inc_row><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>242</LINE></inc_row>
+  <resolve><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>253</LINE></resolve>
+  <ascii_lookup><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>289</LINE></ascii_lookup>
+  <hold_loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>270</LINE></hold_loop>
+  <value_lookup><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>287</LINE></value_lookup>
+ </LABELS>
+</ASSEMBLER_INFO>
