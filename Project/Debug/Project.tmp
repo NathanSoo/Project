@@ -22,32 +22,33 @@
   <FILE>Project.lss</FILE>
  </OUTPUT_FILES>
  <LABELS>
-  <INITIALISE_LCD><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>351</LINE></INITIALISE_LCD>
-  <loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>152</LINE></loop>
-  <scan_keypad><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>417</LINE></scan_keypad>
-  <not_display_mode><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>166</LINE></not_display_mode>
-  <end_process_key><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>301</LINE></end_process_key>
-  <to_end_process_key><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>225</LINE></to_end_process_key>
-  <not_backspace><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>187</LINE></not_backspace>
-  <not_clear><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>202</LINE></not_clear>
-  <not_enter><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>219</LINE></not_enter>
-  <not_nothing1><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>228</LINE></not_nothing1>
-  <not_nothing2><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>237</LINE></not_nothing2>
-  <not_nothing3><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>244</LINE></not_nothing3>
-  <not_first_key><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>253</LINE></not_first_key>
-  <not_same_key><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>281</LINE></not_same_key>
-  <not_nine_wrap><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>272</LINE></not_nine_wrap>
-  <end_key_wrap><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>278</LINE></end_key_wrap>
-  <keypad_to_ascii><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>311</LINE></keypad_to_ascii>
-  <value_lookup><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>507</LINE></value_lookup>
-  <ascii_lookup><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>509</LINE></ascii_lookup>
-  <col_loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>434</LINE></col_loop>
-  <push_mask><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>439</LINE></push_mask>
-  <update_delay><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>442</LINE></update_delay>
-  <nextcol><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>467</LINE></nextcol>
-  <row_loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>454</LINE></row_loop>
-  <inc_row><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>462</LINE></inc_row>
-  <resolve><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>473</LINE></resolve>
-  <hold_loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>490</LINE></hold_loop>
+  <INITIALISE_LCD><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>381</LINE></INITIALISE_LCD>
+  <loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>155</LINE></loop>
+  <scan_keypad><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>447</LINE></scan_keypad>
+  <not_display_mode><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>169</LINE></not_display_mode>
+  <end_process_key><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>329</LINE></end_process_key>
+  <to_end_process_key><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>243</LINE></to_end_process_key>
+  <not_backspace><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>190</LINE></not_backspace>
+  <not_clear><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>205</LINE></not_clear>
+  <not_enter><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>237</LINE></not_enter>
+  <new_name><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>543</LINE></new_name>
+  <keypad_to_ascii><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>341</LINE></keypad_to_ascii>
+  <not_nothing1><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>246</LINE></not_nothing1>
+  <not_nothing2><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>255</LINE></not_nothing2>
+  <not_nothing3><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>262</LINE></not_nothing3>
+  <not_first_key><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>271</LINE></not_first_key>
+  <not_same_key><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>302</LINE></not_same_key>
+  <not_nine_wrap><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>290</LINE></not_nine_wrap>
+  <end_key_wrap><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>299</LINE></end_key_wrap>
+  <value_lookup><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>537</LINE></value_lookup>
+  <ascii_lookup><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>539</LINE></ascii_lookup>
+  <col_loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>464</LINE></col_loop>
+  <push_mask><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>469</LINE></push_mask>
+  <update_delay><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>472</LINE></update_delay>
+  <nextcol><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>497</LINE></nextcol>
+  <row_loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>484</LINE></row_loop>
+  <inc_row><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>492</LINE></inc_row>
+  <resolve><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>503</LINE></resolve>
+  <hold_loop><FILE>C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm</FILE><LINE>520</LINE></hold_loop>
  </LABELS>
 </ASSEMBLER_INFO>

@@ -135,6 +135,8 @@ debounce_loop:
 
 	rcall	INITIALISE_LCD
 
+	clr		zero
+
 	ldi		w, PORTCDIR					; initialise pin directions
 	out		DDRC, w
 	ldi		w, PORTBDIR
@@ -144,7 +146,8 @@ debounce_loop:
 	mov		last_key_pressed, w
 
 	clr		times_key_pressed			; initialise times last key pressed
-	clr		zero
+	clr		entry_mode
+	clr		new_name_cur
 
 ;______________________________________________________________________
 ; MAIN LOOP
@@ -154,8 +157,8 @@ loop:
 	mov		key_pressed, r24
 
 	;	if entry_mode is false and key_pressed == 'A'
-	;		enter encry mode						
-	cp		key_pressed, zero
+	;		enter entry mode						
+	cp		entry_mode, zero
 	brne	not_display_mode
 	ldi		w, A
 	cp		key_pressed, w
@@ -206,7 +209,22 @@ not_clear:
 	cp		key_pressed, w
 	brne	not_enter
 
-	; TODO: enter name
+	ldi		zh, high(new_name)				; new_name[new_name_cur] = keypad_to_ascii(last_key_pressed, times_key_pressed)
+	ldi		zl, low(new_name)
+
+	add		zl, new_name_cur
+	adc		zh, zero
+
+	mov		arg0, last_key_pressed
+	mov		arg1, times_key_pressed
+	rcall	keypad_to_ascii
+
+	st		z+, r24							; times_key_pressed ++
+	
+	ldi		w, '\0'
+	st		z, w							; new_name[new_name_cur] = '\0'
+
+	; TODO: enter name into queue
 
 	clr		new_name_cur					; new_name_cur = 0
 	ldi		w, null							; last_key_pressed = null
@@ -267,9 +285,12 @@ not_first_key:
 	clr		times_key_pressed				; times_key_pressed = 1
 	inc		times_key_pressed
 	rjmp	end_key_wrap
-	;			else if times_key_pressed == 4
+	;			else if key_pressed != '9' and times_key_pressed == 4 
 	;				wrap the number of times key is pressed
 not_nine_wrap:
+	ldi		w, nine
+	cp		key_pressed, w
+	breq	end_key_wrap
 	ldi		w, 4
 	cp		times_key_pressed, w
 	brne	end_key_wrap
@@ -285,12 +306,19 @@ not_same_key:
 	cp		new_name_cur, w
 	brsh	end_process_key
 
+	ldi		zh, high(new_name)				; new_name[new_name_cur] = keypad_to_ascii(last_key_pressed, times_key_pressed)
+	ldi		zl, low(new_name)
+
+	add		zl, new_name_cur
+	adc		zh, zero
+
 	mov		arg0, last_key_pressed
 	mov		arg1, times_key_pressed
 	rcall	keypad_to_ascii
 
+	st		z, r24
+
 	mov		r27, r24
-	rcall	INITIALISE_LCD
 	lcd_write_data
 	lcd_wait_busy
 
@@ -299,6 +327,8 @@ not_same_key:
 	clr		times_key_pressed				; times_key_pressed = 1
 	inc		times_key_pressed
 end_process_key:
+
+	out		PORTB, new_name_cur
 
 	rjmp	loop
 
@@ -508,3 +538,7 @@ value_lookup:
 	.db		1, 2, 3, 0x41, 4, 5, 6, 0x42, 7, 8, 9, 0x43, 0x2A, 0, 0x23, 0x44
 ascii_lookup:
 	.db		'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 0
+
+.dseg
+new_name:
+	.byte	max_name + 1
