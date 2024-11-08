@@ -1,0 +1,21 @@
+// initialise
+initialise_lcd()
+initialise_keypad()
+initialise_buttons()
+initialise_other_pins()
+initialise_timer()
+
+entry_mode = false
+stack = new_stack()
+
+new_name[8]
+new_name_cur = 0;
+while True
+    
+    // poll keypad
+    key_pressed = scan_keypad()
+
+
+    if display_mode is false and key_pressed == 'A'
+        entry_mode = True
+    else if display_mode

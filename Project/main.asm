@@ -10,17 +10,37 @@
 .equ LCD_E = 6
 .equ LCD_RW = 5
 
-.equ PORTCDIR		= 0b11110000
-.equ PORTBDIR		= 0b00001111
-.equ INITCOLMASK	= 0b01111111
-.equ INITROWMASK	= 0b00001000
-.equ CHECKROWMASK	= 0b00001111
+.equ PORTCDIR				= 0b11110000
+.equ PORTBDIR				= 0b00001111
+.equ INITCOLMASK			= 0b01111111
+.equ INITROWMASK			= 0b00001000
+.equ CHECKROWMASK			= 0b00001111
 
-.equ KEYPADSIZE		= 4
-.equ NSTATES		= 3
-.equ LARGESTDIGIT	= 9
+.equ KEYPADSIZE				= 4
+.equ NSTATES				= 3
+.equ LARGESTDIGIT			= 9
 
-.def w				= r16
+.equ A						= 3
+.equ B						= 7
+.equ C						= 11
+.equ D						= 15
+.equ zero_key				= 13
+.equ nine					= 10
+.equ null					= 0xFF
+
+.equ max_name				= 8
+
+.def w						= r16	; working register
+.def entry_mode				= r2
+.def new_name_cur			= r3
+.def key_pressed			= r4
+.def zero					= r5	; register always set to 0
+
+.def last_key_pressed		= r6
+.def times_key_pressed		= r7
+
+.def arg0					= r10
+.def arg1					= r11
 
 .cseg
 
@@ -109,6 +129,10 @@ debounce_loop:
 	brne debounce_loop
 .endmacro
 
+;______________________________________________________________________
+; INITIALISE
+;______________________________________________________________________
+
 	rcall	INITIALISE_LCD
 
 	ldi		w, PORTCDIR					; initialise pin directions
@@ -116,17 +140,213 @@ debounce_loop:
 	ldi		w, PORTBDIR
 	out		DDRB, w
 
+	ldi		w, null						; initialise last key pressed
+	mov		last_key_pressed, w
+
+	clr		times_key_pressed			; initialise times last key pressed
+	clr		zero
+
 ;______________________________________________________________________
 ; MAIN LOOP
 ;______________________________________________________________________
 loop:
-	rcall	scan_keypad
+	rcall	scan_keypad					; poll until key is pressed then return key index in r24
+	mov		key_pressed, r24
+
+	;	if entry_mode is false and key_pressed == 'A'
+	;		enter encry mode						
+	cp		key_pressed, zero
+	brne	not_display_mode
+	ldi		w, A
+	cp		key_pressed, w
+	brne	not_display_mode
+	inc		entry_mode
+	rjmp	end_process_key
+
+not_display_mode:
+	;	else if entry_mode is true
+	;		handle keys which are not 'A'
+	cp		entry_mode, zero
+	breq	to_end_process_key
+	;		if new_name_cur != 0 and key_pressed == 'B'
+	;			backspace button is pressed
+	cp		new_name_cur, zero
+	breq	not_backspace
+	ldi		w, B
+	cp		key_pressed, w
+	brne	not_backspace
+	dec		new_name_cur					; new_name_cur --
+	
+	; TODO: lcd function to remove last character
+
+	ldi		w, null							; last_key_pressed = null
+	mov		last_key_pressed, w
+	clr		times_key_pressed				; times_key_pressed = 0
+	rjmp	end_process_key
+
+not_backspace:
+	;		else if key_pressed == 'C'
+	;			clear button is pressed
+	ldi		w, C
+	cp		key_pressed, w
+	brne	not_clear
+	clr		new_name_cur					; new_name_cur = 0
+	
+	;  TODO: lcd function to clear name input area
+
+	ldi		w, null							; last_key_pressed = null
+	mov		last_key_pressed, w
+	clr		times_key_pressed				; times_key_pressed = 0
+	rjmp	end_process_key
+
+not_clear:
+	;		else if key_pressed == 'D'
+	;			enter button is pressed
+	ldi		w, D
+	cp		key_pressed, w
+	brne	not_enter
+
+	; TODO: enter name
+
+	clr		new_name_cur					; new_name_cur = 0
+	ldi		w, null							; last_key_pressed = null
+	mov		last_key_pressed, w
+	clr		times_key_pressed				; times_key_pressed = 0
+	rjmp	end_process_key
+	clr		entry_mode						; entry_mode = false
+	rjmp	end_process_key
+
+not_enter:
+	;		else if key_pressed == 'A'
+	;			do nothing
+	ldi		w, A
+	cp		key_pressed, w
+	brne	not_nothing1
+to_end_process_key:
+	rjmp	end_process_key
+
+not_nothing1:
+	;		else if key_pressed is on the bottom row
+	;			do nothing
+	ldi		w, C
+	inc		w
+	cp		key_pressed, w
+	brlo	not_nothing2
+	rjmp	end_process_key
+
+not_nothing2:
+	;		else if key_pressed == '1'
+	;			do nothing
+	cp		key_pressed, zero
+	brne	not_nothing3
+	rjmp	end_process_key
+
+not_nothing3:
+	;		else if times_key_pressed == 0
+	;			first input key pressed
+	cp		times_key_pressed, zero
+	brne	not_first_key
+	mov		last_key_pressed, key_pressed	; last_key_presed = key_pressed
+	inc		times_key_pressed				; times_key_pressed = 1
+	rjmp	end_process_key
+
+not_first_key:
+	;		else if last_key_pressed == key_pressed
+	;			cycle between letters on the same key
+	cp		last_key_pressed, key_pressed
+	brne	not_same_key
+	inc		times_key_pressed
+	;			if key_pressed == '9' and times_key_pressed == 5
+	;				wrap the number of times key is pressed
+	ldi		w, nine
+	cp		key_pressed, w
+	brne	not_nine_wrap
+	ldi		w, 5
+	cp		times_key_pressed, w
+	brne	not_nine_wrap
+	clr		times_key_pressed				; times_key_pressed = 1
+	inc		times_key_pressed
+	rjmp	end_key_wrap
+	;			else if times_key_pressed == 4
+	;				wrap the number of times key is pressed
+not_nine_wrap:
+	ldi		w, 4
+	cp		times_key_pressed, w
+	brne	end_key_wrap
+	clr		times_key_pressed				; times_key_pressed = 1
+	inc		times_key_pressed
+end_key_wrap:
+	rjmp	end_process_key
+
+not_same_key:
+	;		else if last_key_pressed != key_pressed and new_name_cur < 8
+	;			enter letter
+	ldi		w, max_name
+	cp		new_name_cur, w
+	brsh	end_process_key
+
+	mov		arg0, last_key_pressed
+	mov		arg1, times_key_pressed
+	rcall	keypad_to_ascii
+
 	mov		r27, r24
 	rcall	INITIALISE_LCD
 	lcd_write_data
 	lcd_wait_busy
+
+	inc		new_name_cur					; new_name_cur ++
+	mov		last_key_pressed, key_pressed	; last_key_pressed = key_pressed
+	clr		times_key_pressed				; times_key_pressed = 1
+	inc		times_key_pressed
+end_process_key:
+
 	rjmp	loop
 
+;______________________________________________________________________
+; HELPER FUNCTIONS
+; arguments
+; last_key_pressed - arg0 (r10)
+; times_key_pressed - arg1 (r11)
+;______________________________________________________________________
+keypad_to_ascii:
+	push	zl
+	push	zh
+	push	w
+	push	r17
+
+	; get keypad number value from lookup table
+	ldi		zh, high(value_lookup << 1)
+	ldi		zl, low(value_lookup << 1)
+
+	add		zl, arg0
+	adc		zh, zero
+
+	; do maths
+	lpm		w, z
+	dec		w
+	dec		w
+	dec		arg1
+
+	mov		r17, w
+	lsl		r17
+	add		w, r17
+	add		w, arg1
+
+	; get ascii value of input character from lookup table
+	ldi		zh, high(ascii_lookup << 1)
+	ldi		zl, low(ascii_lookup << 1)
+
+	add		zl, w
+	adc		zh, zero
+
+	lpm		w, z
+	mov		r24, w
+
+	pop		r17
+	pop		w
+	pop		zh
+	pop		zl
+	ret
 
 INITIALISE_LCD:
 	; prologue
@@ -256,14 +476,14 @@ resolve:
 	mov		w, r3
 	add		w, r2
 
-	ldi		zh, high(ascii_lookup<<1)	; get numeric value from lookup table (or ascii if non-numeric)
-	ldi		zl, low(ascii_lookup<<1)
+	;ldi		zh, high(ascii_lookup<<1)	; get numeric value from lookup table (or ascii if non-numeric)
+	;ldi		zl, low(ascii_lookup<<1)
 
-	clr		r4							
-	add		zl, w
-	adc		zh, r4
+	; clr		r4							
+	; add		zl, w
+	; adc		zh, r4
 
-	lpm		w, z
+	; lpm		w, z
 
 	mov		r24, w
 
@@ -287,4 +507,4 @@ hold_loop:								; wait until button is unpressed before continuing to read key
 value_lookup:
 	.db		1, 2, 3, 0x41, 4, 5, 6, 0x42, 7, 8, 9, 0x43, 0x2A, 0, 0x23, 0x44
 ascii_lookup:
-	.db		0x31, 0x32, 0x33, 0x41, 0x34, 0x35, 0x36, 0x42, 0x37, 0x38, 0x39, 0x43, 0x2A, 0x30, 0x23, 0x44
+	.db		'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 0
