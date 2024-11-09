@@ -4,6 +4,14 @@
 ; Created: 5/11/2024 11:29:53 AM
 ; Author : nsoo1
 ;
+
+     ; Patient struct ;
+;..........................;
+;   Patient ID - 2 bytes   ;
+;..........................;
+;  Patient Name - 8 bytes  ;
+;..........................;
+
 .include "m2560def.inc"
 
 .equ LCD_RS = 7
@@ -28,6 +36,9 @@
 .equ nine					= 10
 .equ null					= 0xFF
 
+.equ P_SIZE					= 10    ; Size of patient struct: 10 bytes
+.equ INIT_ID				= 100   ; Patient IDs will start from 100
+
 .equ max_name				= 8
 
 .def w						= r16	; working register
@@ -42,8 +53,17 @@
 .def arg0					= r10
 .def arg1					= r11
 
-.cseg
+.dseg								; Start the data segment
+.org 0x0200							; from address 0x0200
 
+new_name:					.byte max_name + 1 ; CONFLICT
+temp_name:					.byte 8            ; Queue functions assume 8 bytes for name
+num_patients:				.byte 2
+init_pid:					.byte 2                                  
+first_patient:				.byte 2                 
+last_patient:				.byte 2  ; Reserve space for Queue variables in data memory
+
+.cseg
 
 .macro lcd_write_cmd		; set LCD instructions, does not wait for BF
 	out PORTF, r16			; set data port
@@ -129,10 +149,49 @@ debounce_loop:
 	brne debounce_loop
 .endmacro
 
+; Reads name from temp_name variable in data memory,
+; stores it in newest patient struct on queue.
+; Assumes address of patient_name stored in Y.
+.macro read_name
+	ldi ZH, high(temp_name)
+	ldi ZL, low(temp_name)
+	ldi r26, 8
+read_loop:
+	ld  r27, Z+
+	st  Y+, r27
+	dec r26
+	cpi r26, 0
+	brne read_loop                     ; Continue reading up to 8 chars
+.endmacro 
+
+; init patient queue
+; call first before any registers are used
+.macro init_queue
+	ldi  YH, high(num_patients)                      
+	ldi  YL, low(num_patients)
+	clr  r24
+	clr  r25
+	st   Y+, r24                       ; Init num_patients = 0
+	st   Y+, r25
+	ldi  r24, INIT_ID-1				   ; Init patient ID
+	st   Y, r24
+	adiw Y, 2
+    mov  r24, YL
+	mov  r25, YH
+	adiw r24, 8                        ; Adjust num bytes here if needed
+	st   Y+, r24
+	st   Y+, r25                       ; init pointer to first patient
+    ldi  r25, high(init_pid)
+	ldi  r24, low(init_pid)
+	st   Y+, r24
+	st   Y, r25                        ; init pointer to last patient
+.endmacro
+
 ;______________________________________________________________________
 ; INITIALISE
 ;______________________________________________________________________
 
+	init_queue
 	rcall	INITIALISE_LCD
 
 	clr		zero
@@ -534,11 +593,134 @@ hold_loop:								; wait until button is unpressed before continuing to read key
 	pop		w
 	ret
 
+; Clears temp_name variable in memory
+clear_name:
+	push YL
+	push YH
+	push r16
+	push r17
+	ldi  YH, high(temp_name)
+	ldi  YL, low(temp_name)
+	ldi  r16, 8
+	ldi  r17, 0
+delete:
+	st   Y+, r17
+	dec  r16
+	cpi  r16, 0
+	brne delete
+	pop  r17
+	pop  r16
+	pop  ZH
+	pop  ZL
+	ret
+
+; Enqueues new patient
+; Assigns pid and returns pointer to location of
+; patient struct in data memory.
+; Should ideally be done with interrupts disabled
+; to avoid race conditions.
+enqueue:
+	push YL
+	push YH
+	push ZL
+	push ZH
+	push r26
+	push r27
+	ldi  YH, high(last_patient)
+	ldi  YL, low(last_patient)
+	ld   r26, Y+
+	ld   r27, Y
+	movw Z, r26                    ; Store pointer to previous end of Q
+	adiw r26, P_SIZE
+	st   Y, r27
+	st   -Y, r26                   ; Update pointer to last patient in queue
+	movw Y, r26                    ; Move Y pointer to new_patient
+	movw r24, r26				   ; Move address of new_patient to return registers
+	ld   r26, Z+
+	ld   r27, Z                    ; Load most recent pid
+	adiw r26, 1					   ; Increment
+	st   Y+, r26
+	st   Y+, r27			       ; Assign new pid to next patient
+	read_name					   ; Reads in patient name from data memory
+	rcall clear_name
+	ldi  YH, high(num_patients)
+	ldi  YL, low(num_patients)  
+	ld   r26, Y+
+	ld   r27, Y
+	adiw r26, 1                 
+	st   Y, r27
+	st   -Y, r26				   ; Update num_patients last                     
+	pop  r27
+	pop  r26
+	pop  ZH
+	pop  ZL
+	pop  YH
+	pop  YL
+	ret
+
+; Dequeues first patient from queue and discards
+; Does not return any values.
+; Should ideally be done with interrupts disabled
+; to avoid race conditions.	
+dequeue:
+	push YH
+	push YL
+	push r25
+	push r24
+	push r27
+	push r26
+	ldi  YH, high(num_patients)
+	ldi  YL, low(num_patients)      
+	ld   r26, Y+
+	ld   r27, Y
+	sbiw r26, 1
+	st   Y, r27
+	st  -Y, r26                     ; Update num_patients first
+	ldi  YH, high(first_patient)    
+	ldi  YL, low(first_patient)
+	ld   r24, Y+					
+	ld   r25, Y						; Store address of dequeued patient to be cleared
+	cpi  r26, 0
+	brne not_empty
+	cpi  r27, 0
+	brne not_empty                  ; If queue not empty, proceed
+	ldi  YH, high(first_patient)    
+	ldi  YL, low(first_patient)
+	movw r26, Y                     ; Else reset queue variables
+	adiw r26, 8
+	st   Y+, r26
+	st   Y+, r27
+	ldi  r27, high(init_pid)
+	ldi  r26, low(init_pid)
+	st   Y+, r26
+	st   Y, r27
+	rjmp clear_patient
+not_empty:
+	ldi  YH, high(first_patient)    ; Increment first_patient pointer
+	ldi  YL, low(first_patient)
+	ld   r26, Y+
+	ld   r27, Y
+	adiw r26, P_SIZE
+	st   Y, r27
+	st   -Y, r26
+clear_patient:
+	movw Y, r24                     
+	ldi r26, P_SIZE                 ; Then clear patient struct
+	ldi r27, 0
+clear_pt_loop:
+	st  Y+, r27
+	dec r26
+	cpi r26, 0
+	brne clear_pt_loop
+	pop r26
+	pop r27
+	pop r24
+	pop r25
+	pop YL
+	pop YH
+	ret
+
 value_lookup:
 	.db		1, 2, 3, 0x41, 4, 5, 6, 0x42, 7, 8, 9, 0x43, 0x2A, 0, 0x23, 0x44
 ascii_lookup:
 	.db		'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 0
-
-.dseg
-new_name:
-	.byte	max_name + 1
