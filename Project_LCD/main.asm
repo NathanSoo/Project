@@ -122,6 +122,7 @@ loop2:
 	brne loop1				; 2 taken, each outer iteration is 11 + 1 + 1 + 1 + 2 = 16 clock cycles at 16Mhz = 1us
 .endmacro
 
+; CAN DELETE
 .macro long_delay
 	ldi r16, 20
 l1:
@@ -136,7 +137,7 @@ loop_jmp:
 no_jmp:
 .endmacro
 
-; example use
+; example use CAN DELETE
 main:
 	; display mode
 	rcall INITIALISE_LCD
