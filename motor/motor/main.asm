@@ -41,38 +41,38 @@ timer0ovf:
 	push YL
 	push r25
 	push r24						; Prologue ends
-	ldi YL, low(TempCounter) 
-	ldi YH, high(TempCounter)		; Y pointer points to temp counter
-	ld r24, Y+						; Load the value of the temporary counter.
-	ld r25, Y
+	ldi  YL, low(TempCounter) 
+	ldi  YH, high(TempCounter)		; Y pointer points to temp counter
+	ld   r24, Y+					; Load the value of the temporary counter.
+	ld   r25, Y
 	adiw r25:r24, 1					; Increase the temporary counter by one.
-	cpi r24, low(1000)				; Check if (r25:r24)=1000
+	cpi  r24, low(1000)				; Check if (r25:r24)=1000
 	brne not_second
-	cpi r25, high(1000)
+	cpi  r25, high(1000)
 	brne not_second
-	ldi w, (1 << CS50)				; Toggle Timer 5 (No prescaling)
-	eor motor_state, w
-	sts TCCR5B, motor_state
+	ldi  w, (1 << CS50)				; Toggle Timer 5 (no pre-scaling)
+	eor  motor_state, w
+	sts  TCCR5B, motor_state
 	clear_word TempCounter
-	ldi YL, low(SecondCounter)		; Load the address of the second
-	ldi YH, high(SecondCounter)		; counter.
-	ld r24, Y+						; Load the value of the second counter.
-	ld r25, Y
+	ldi  YL, low(SecondCounter)		; Load the address of the second counter.
+	ldi  YH, high(SecondCounter)		
+	ld   r24, Y+					; Load the value of the second counter.
+	ld   r25, Y
 	adiw r25:r24, 1					; Increase the second counter by one.
-	st Y, r25						; Store the value of the second counter.
-	st -Y, r24
+	st   Y, r25						; Store the value of the second counter.
+	st   -Y, r24
 	rjmp endif
 not_second:
-	st Y, r25
-	st -Y, r24
+	st   Y, r25
+	st  -Y, r24
 endif:
-	pop r24
-	pop r25
-	pop YL
-	pop YH
-	pop w
-	out SREG, w
-	pop w
+	pop  r24
+	pop  r25
+	pop  YL
+	pop  YH
+	pop  w
+	out  SREG, w
+	pop  w
 	reti
 
 ; Motor on for 1 second, off 1 second
