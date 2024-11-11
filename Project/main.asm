@@ -52,11 +52,12 @@
 
 .def arg0					= r10
 .def arg1					= r11
+.def arg2					= r12
 
 .dseg								; Start the data segment
 .org 0x0200							; from address 0x0200
 
-new_name:					.byte max_name + 1 ; CONFLICT
+new_name:					.byte max_name
 temp_name:					.byte 8            ; Queue functions assume 8 bytes for name
 num_patients:				.byte 2
 init_pid:					.byte 2                                  
@@ -206,6 +207,18 @@ read_loop:
 
 	clr		times_key_pressed			; initialise times last key pressed
 	clr		entry_mode
+
+	ldi		w, high(new_name)
+	mov		arg0, w
+
+	ldi		w, low(new_name)
+	mov		arg1, w
+
+	ldi		w, max_name
+	mov		arg2, w
+
+	rcall	initialise_array
+
 	clr		new_name_cur
 
 ;______________________________________________________________________
@@ -259,6 +272,7 @@ not_backspace:
 	ldi		w, null							; last_key_pressed = null
 	mov		last_key_pressed, w
 	clr		times_key_pressed				; times_key_pressed = 0
+to_end_process_key:
 	rjmp	end_process_key
 
 not_clear:
@@ -276,20 +290,32 @@ not_clear:
 
 	mov		arg0, last_key_pressed
 	mov		arg1, times_key_pressed
+	
 	rcall	keypad_to_ascii
 
-	st		z+, r24							; times_key_pressed ++
-	
-	ldi		w, '\0'
-	st		z, w							; new_name[new_name_cur] = '\0'
+	st		z, r24
+
+	mov		r27, r24
+	lcd_write_data
+	lcd_wait_busy
 
 	; TODO: enter name into queue
+
+	ldi		w, high(new_name)			; initialise_array(new_name, 8)
+	mov		arg0, w
+
+	ldi		w, low(new_name)
+	mov		arg1, w
+
+	ldi		w, max_name
+	mov		arg2, w
+
+	rcall	initialise_array
 
 	clr		new_name_cur					; new_name_cur = 0
 	ldi		w, null							; last_key_pressed = null
 	mov		last_key_pressed, w
 	clr		times_key_pressed				; times_key_pressed = 0
-	rjmp	end_process_key
 	clr		entry_mode						; entry_mode = false
 	rjmp	end_process_key
 
@@ -299,7 +325,6 @@ not_enter:
 	ldi		w, A
 	cp		key_pressed, w
 	brne	not_nothing1
-to_end_process_key:
 	rjmp	end_process_key
 
 not_nothing1:
@@ -359,9 +384,9 @@ end_key_wrap:
 	rjmp	end_process_key
 
 not_same_key:
-	;		else if last_key_pressed != key_pressed and new_name_cur < 8
+	;		else if last_key_pressed != key_pressed and new_name_cur < 7
 	;			enter letter
-	ldi		w, max_name
+	ldi		w, max_name - 1
 	cp		new_name_cur, w
 	brsh	end_process_key
 
@@ -393,6 +418,49 @@ end_process_key:
 
 ;______________________________________________________________________
 ; HELPER FUNCTIONS
+;______________________________________________________________________
+
+;______________________________________________________________________
+; initialise_array
+; arguments
+; array - arg0:arg1 (r10:r11)
+; length - arg2 (r12)
+;______________________________________________________________________
+initialise_array:
+	push	zl
+	push	zh
+	push	r17
+
+	mov		zh, arg0
+	mov		zl, arg1
+
+	mov		r17, arg2
+
+	;rcall	INITIALISE_LCD
+
+initialise_array_loop:
+	cp		r17, zero
+	breq	end_initialise_array_loop
+
+	;ld		r27, z
+	;cp		r27, zero
+	;breq	dont_write
+	;lcd_write_data
+	;lcd_wait_busy
+;dont_write:
+	st		z+, zero
+
+	dec		r17
+	rjmp	initialise_array_loop
+end_initialise_array_loop:
+
+	pop		r17
+	pop		zh
+	pop		zl
+	ret
+
+;______________________________________________________________________
+; keypad_to_ascii
 ; arguments
 ; last_key_pressed - arg0 (r10)
 ; times_key_pressed - arg1 (r11)
@@ -503,6 +571,12 @@ INITIALISE_LCD:
 	pop r16
 	ret
 
+;______________________________________________________________________
+; keypad_to_ascii
+; arguments
+; last_key_pressed - arg0 (r10)
+; times_key_pressed - arg1 (r11)
+;______________________________________________________________________
 scan_keypad:
 	push	w
 	push	r2

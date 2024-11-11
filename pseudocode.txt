@@ -9,7 +9,7 @@ entry_mode = false
 queue = new_queue()
 next_patient = null
 
-new_name[9]
+new_name[8] = {0, 0, ...}
 new_name_cur = 0;
 
 last_key_pressed = null
@@ -36,11 +36,10 @@ while true
         times_key_pressed = 0
     else if entry_mode is true and key_pressed == 'D'
         new_name[new_name_cur] = keypad_to_ascii(last_key_pressed, times_key_pressed)
-        new_name_cur ++
-        new_name[new_name_cur] = '\0'
         queue_push(queue, new_name)
 
         new_name_cur = 0
+        initialise_array(new_name, 8)
         last_key_pressed = null
         times_key_pressed = 0
         entry_mode = false
@@ -64,6 +63,12 @@ while true
         last_key_pressed = key_pressed
         times_key_pressed = 1
 
+function initialise_array(array, length)
+    i = 8
+    while i > 0
+        array[i] = 0
+        i--
+
 function keypad_to_ascii(last_key_pressed, times_key_pressed)
     
 
@@ -77,3 +82,7 @@ isr cancel_appointment
 isr update_wait_time
 
 isr motor_stuff
+
+8 7 6 5 4 3 2 1
+
+0 1 2 3 4 5 6 7 
