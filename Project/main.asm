@@ -62,7 +62,7 @@ temp_name:					.byte 8            ; Queue functions assume 8 bytes for name
 num_patients:				.byte 2
 init_pid:					.byte 2                                  
 first_patient:				.byte 2                 
-last_patient:				.byte 2  ; Reserve space for Queue variables in data memory
+last_patient:				.byte 2            ; Reserve space for Queue variables in data memory
 
 .cseg
 
@@ -687,6 +687,17 @@ delete:
 	pop  ZH
 	pop  ZL
 	ret
+
+; Returns length of queue in r25:r24
+get_queue_len:
+	push YL
+	push YH
+	ldi  YH, high(num_patients)
+	ldi  YL, low(num_patients)
+	ld   r24, Y+
+	ld   r25, Y                 ; Stores queue length (num_patients) in r25:r24
+	pop  YH
+	pop  YL
 
 ; Enqueues new patient
 ; Assigns pid and returns pointer to location of
