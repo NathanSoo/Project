@@ -87,12 +87,12 @@ beep_beep:
 
 reset:
 	; Set Timer 0 to count seconds
-	ldi w, 0
+	clr w
 	out TCCR0A, w				    ; Set Timer 0 to Normal Mode
 	ldi w, 0b00000011
 	out TCCR0B, w					; Prescaler value = 64
 	; Set Timer 5 for waveform generation
-	ldi w, 0b00001000
+	ldi w, 0b00111111
 	sts DDRL, w						; Set Pin 3, Port L as output pin
 	clr w
 	sts OCR5AH, w					; Set timer compare value to 0x4A
@@ -100,7 +100,9 @@ reset:
 	sts OCR5AL, w     
 	ldi w, (1<< WGM50)|(1<<COM5A1)	; Set Timer 5 to Phase Correct PWM mode
 	sts TCCR5A, w
-	sei								; Enable global interrupts
+	ldi w, (1<< WGM52)	
+	sts TCCR5B, w
 	rcall beep_beep
+	sei								; Enable global interrupts
 loop:
 	rjmp loop

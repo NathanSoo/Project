@@ -1,5 +1,5 @@
 
-AVRASM ver. 2.2.8  C:\Users\ffordian\Documents\assign\motor\motor\main.asm Mon Nov 11 03:41:59 2024
+AVRASM ver. 2.2.8  C:\Users\ffordian\Documents\gitcode\Project\motor\motor\main.asm Tue Nov 12 11:10:53 2024
 
 
 EQU  SIGNATURE_000 0000001e
@@ -1368,4 +1368,4 @@ CSEG timer0ovf    00000030
 CSEG not_second   00000051
 CSEG endif        00000053
 CSEG beep_beep    0000005b
-CSEG loop         0000007d
+CSEG loop         00000080

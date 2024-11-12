@@ -1,10 +1,10 @@
 
-AVRASM ver. 2.2.8  C:\Users\ffordian\Documents\assign\motor\motor\main.asm Mon Nov 11 03:41:59 2024
+AVRASM ver. 2.2.8  C:\Users\ffordian\Documents\gitcode\Project\motor\motor\main.asm Tue Nov 12 11:10:53 2024
 
 [builtin](2): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc'
-C:\Users\ffordian\Documents\assign\motor\motor\main.asm(8): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc'
+C:\Users\ffordian\Documents\gitcode\Project\motor\motor\main.asm(8): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc'
 [builtin](2): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc'
-C:\Users\ffordian\Documents\assign\motor\motor\main.asm(8): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc'
+C:\Users\ffordian\Documents\gitcode\Project\motor\motor\main.asm(8): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc'
                                  
                                  ;
                                  
@@ -1929,42 +1929,42 @@ C:\Users\ffordian\Documents\assign\motor\motor\main.asm(8): Including file 'C:/P
 000034 93cf                      	push YL
 000035 939f                      	push r25
 000036 938f                      	push r24						; Prologue ends
-000037 e0c2                      	ldi YL, low(TempCounter) 
-000038 e0d2                      	ldi YH, high(TempCounter)		; Y pointer points to temp counter
-000039 9189                      	ld r24, Y+						; Load the value of the temporary counter.
-00003a 8198                      	ld r25, Y
+000037 e0c2                      	ldi  YL, low(TempCounter) 
+000038 e0d2                      	ldi  YH, high(TempCounter)		; Y pointer points to temp counter
+000039 9189                      	ld   r24, Y+					; Load the value of the temporary counter.
+00003a 8198                      	ld   r25, Y
 00003b 9601                      	adiw r25:r24, 1					; Increase the temporary counter by one.
-00003c 3e88                      	cpi r24, low(1000)				; Check if (r25:r24)=1000
+00003c 3e88                      	cpi  r24, low(1000)				; Check if (r25:r24)=1000
 00003d f499                      	brne not_second
-00003e 3093                      	cpi r25, high(1000)
+00003e 3093                      	cpi  r25, high(1000)
 00003f f489                      	brne not_second
-000040 e001                      	ldi w, (1 << CS50)				; Toggle Timer 5 (No prescaling)
-000041 26c0                      	eor motor_state, w
-000042 92c0 0121                 	sts TCCR5B, motor_state
+000040 e001                      	ldi  w, (1 << CS50)				; Toggle Timer 5 (no pre-scaling)
+000041 26c0                      	eor  motor_state, w
+000042 92c0 0121                 	sts  TCCR5B, motor_state
 000044 e0c2
 000045 e0d2
 000046 2700
 000047 9309
 000048 8308                      	clear_word TempCounter
-000049 e0c0                      	ldi YL, low(SecondCounter)		; Load the address of the second
-00004a e0d2                      	ldi YH, high(SecondCounter)		; counter.
-00004b 9189                      	ld r24, Y+						; Load the value of the second counter.
-00004c 8198                      	ld r25, Y
+000049 e0c0                      	ldi  YL, low(SecondCounter)		; Load the address of the second counter.
+00004a e0d2                      	ldi  YH, high(SecondCounter)		
+00004b 9189                      	ld   r24, Y+					; Load the value of the second counter.
+00004c 8198                      	ld   r25, Y
 00004d 9601                      	adiw r25:r24, 1					; Increase the second counter by one.
-00004e 8398                      	st Y, r25						; Store the value of the second counter.
-00004f 938a                      	st -Y, r24
+00004e 8398                      	st   Y, r25						; Store the value of the second counter.
+00004f 938a                      	st   -Y, r24
 000050 c002                      	rjmp endif
                                  not_second:
-000051 8398                      	st Y, r25
-000052 938a                      	st -Y, r24
+000051 8398                      	st   Y, r25
+000052 938a                      	st  -Y, r24
                                  endif:
-000053 918f                      	pop r24
-000054 919f                      	pop r25
-000055 91cf                      	pop YL
-000056 91df                      	pop YH
-000057 910f                      	pop w
-000058 bf0f                      	out SREG, w
-000059 910f                      	pop w
+000053 918f                      	pop  r24
+000054 919f                      	pop  r25
+000055 91cf                      	pop  YL
+000056 91df                      	pop  YH
+000057 910f                      	pop  w
+000058 bf0f                      	out  SREG, w
+000059 910f                      	pop  w
 00005a 9518                      	reti
                                  
                                  ; Motor on for 1 second, off 1 second
@@ -1987,12 +1987,12 @@ C:\Users\ffordian\Documents\assign\motor\motor\main.asm(8): Including file 'C:/P
                                  
                                  reset:
                                  	; Set Timer 0 to count seconds
-00006b e000                      	ldi w, 0
+00006b 2700                      	clr w
 00006c bd04                      	out TCCR0A, w				    ; Set Timer 0 to Normal Mode
 00006d e003                      	ldi w, 0b00000011
 00006e bd05                      	out TCCR0B, w					; Prescaler value = 64
                                  	; Set Timer 5 for waveform generation
-00006f e008                      	ldi w, 0b00001000
+00006f e30f                      	ldi w, 0b00111111
 000070 9300 010a                 	sts DDRL, w						; Set Pin 3, Port L as output pin
 000072 2700                      	clr w
 000073 9300 0129                 	sts OCR5AH, w					; Set timer compare value to 0x4A
@@ -2000,8 +2000,10 @@ C:\Users\ffordian\Documents\assign\motor\motor\main.asm(8): Including file 'C:/P
 000076 9300 0128                 	sts OCR5AL, w     
 000078 e801                      	ldi w, (1<< WGM50)|(1<<COM5A1)	; Set Timer 5 to Phase Correct PWM mode
 000079 9300 0120                 	sts TCCR5A, w
-00007b 9478                      	sei								; Enable global interrupts
-00007c dfde                      	rcall beep_beep
+00007b e008                      	ldi w, (1<< WGM52)	
+00007c 9300 0121                 	sts TCCR5B, w
+00007e dfdc                      	rcall beep_beep
+00007f 9478                      	sei								; Enable global interrupts
                                  loop:
 
 
@@ -2022,7 +2024,7 @@ counted separately from r26..r31 here.
 "ATmega2560" register use summary:
 x  :   0 y  :  14 z  :   0 r0 :   0 r1 :   0 r2 :   0 r3 :   0 r4 :   0 
 r5 :   0 r6 :   0 r7 :   0 r8 :   0 r9 :   0 r10:   0 r11:   0 r12:   2 
-r13:   0 r14:   0 r15:   0 r16:  33 r17:   0 r18:   0 r19:   0 r20:   0 
+r13:   0 r14:   0 r15:   0 r16:  35 r17:   0 r18:   0 r19:   0 r20:   0 
 r21:   0 r22:   0 r23:   0 r24:   9 r25:   9 r26:   0 r27:   0 r28:   7 
 r29:   7 r30:   0 r31:   0 
 Registers used: 7 out of 35 (20.0%)
@@ -2034,7 +2036,7 @@ brcc  :   0 brcs  :   0 break :   0 breq  :   0 brge  :   0 brhc  :   0
 brhs  :   0 brid  :   0 brie  :   0 brlo  :   0 brlt  :   0 brmi  :   0 
 brne  :   2 brpl  :   0 brsh  :   0 brtc  :   0 brts  :   0 brvc  :   0 
 brvs  :   0 bset  :   0 bst   :   0 call  :   0 cbi   :   0 cbr   :   0 
-clc   :   0 clh   :   0 cli   :   0 cln   :   0 clr   :   4 cls   :   0 
+clc   :   0 clh   :   0 cli   :   0 cln   :   0 clr   :   5 cls   :   0 
 clt   :   0 clv   :   0 clz   :   0 com   :   0 cp    :   0 cpc   :   0 
 cpi   :   2 cpse  :   0 dec   :   0 eicall:   0 eijmp :   0 elpm  :   0 
 eor   :   1 fmul  :   0 fmuls :   0 fmulsu:   0 icall :   0 ijmp  :   0 
@@ -2046,14 +2048,14 @@ reti  :   1 rjmp  :   3 rol   :   0 ror   :   0 sbc   :   0 sbci  :   0
 sbi   :   0 sbic  :   0 sbis  :   0 sbiw  :   0 sbr   :   0 sbrc  :   0 
 sbrs  :   0 sec   :   0 seh   :   0 sei   :   1 sen   :   0 ser   :   0 
 ses   :   0 set   :   0 sev   :   0 sez   :   0 sleep :   0 spm   :   0 
-st    :  10 std   :   0 sts   :   6 sub   :   0 subi  :   0 swap  :   0 
+st    :  10 std   :   0 sts   :   7 sub   :   0 subi  :   0 swap  :   0 
 tst   :   0 wdr   :   0 
 Instructions used: 20 out of 116 (17.2%)
 
 "ATmega2560" memory use summary [bytes]:
 Segment   Begin    End      Code   Data   Used    Size   Use%
 ---------------------------------------------------------------
-[.cseg] 0x000000 0x0000fc    164      0    164  262144   0.1%
+[.cseg] 0x000000 0x000102    170      0    170  262144   0.1%
 [.dseg] 0x000200 0x000204      0      4      4    8192   0.0%
 [.eseg] 0x000000 0x000000      0      0      0    4096   0.0%
 
