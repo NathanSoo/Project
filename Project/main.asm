@@ -289,12 +289,12 @@ reset:
 	clr		new_name_cur
 	clr		is_timer_active
 
-	;ldi		w, 0b00000000
-	;sts		TCCR3A, w
+	ldi		w, 0b00000000
+	sts		TCCR3A, w
 	ldi		w, 0b00000000
 	sts		TCCR3B, w
 
-	;sts		TIMSK3, zero
+	sts		TIMSK3, zero
 
 	ldi		zh, high(is_keypad_timeout)
 	ldi		zl, low(is_keypad_timeout)
@@ -527,7 +527,7 @@ end_process_key:
 	sts		TIMSK3, w
 timer_not_active:
 
-	sts		PORTB, is_timer_active
+	out		PORTB, is_timer_active
 
 	rjmp	loop
 
