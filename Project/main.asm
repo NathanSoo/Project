@@ -17,6 +17,7 @@
 .equ LCD_RS = 7
 .equ LCD_E = 6
 .equ LCD_RW = 5
+.equ STROBE = 1
 
 .equ PORTCDIR				= 0b11110000
 .equ PORTBDIR				= 0b00001111
@@ -67,60 +68,112 @@ last_patient:				.byte 2            ; Reserve space for Queue variables in data 
 .cseg
 
 .macro lcd_write_cmd		; set LCD instructions, does not wait for BF
-	out PORTF, r16			; set data port
-	clr r18
-	out PORTA, r18			; RS = 0, RW = 0 for a command write
+	out PORTF, r16			; set r16 port
+	clr_LCD_RS
+	clr_LCD_RW				; RS = 0, RW = 0 for a command write
 	nop
-	sbi PORTA, LCD_E		
+	set_LCD_E		
 	nop
 	nop
 	nop
-	cbi PORTA, LCD_E
+	clr_LCD_E
 	nop
 	nop
 	nop
 .endmacro
 
-.macro lcd_write_data		; write data to LCD, waits for BF
-	out PORTF, r27			; set data port
-	ldi r18, (1 << LCD_RS)|(0 << LCD_RW)
-	out PORTA, r18			; RS = 1, RW = 0 for data write
-	nop
-	sbi PORTA, LCD_E		;
-	nop
-	nop
-	nop
+.macro set_LCD_RS
+	sbi PORTA, LCD_RS
+.endmacro
+
+.macro clr_LCD_RS
+	cbi PORTA, LCD_RS
+.endmacro
+
+.macro set_LCD_E
+	sbi PORTA, LCD_E
+.endmacro
+
+.macro clr_LCD_E
 	cbi PORTA, LCD_E
+.endmacro
+
+.macro set_LCD_RW
+	sbi PORTA, LCD_RW
+.endmacro
+
+.macro clr_LCD_RW
+	cbi PORTA, LCD_RW
+.endmacro
+
+.macro set_strobe
+	sbi PORTA, STROBE
+.endmacro
+
+.macro clr_strobe
+	cbi PORTA, STROBE
+.endmacro
+
+.macro lcd_write_data		; write r16 to LCD, waits for BF
+	out PORTF, r19			; set r16 port
+	set_LCD_RS
+	clr_LCD_RW				; RS = 1, RW = 0 for r16 write
+	nop
+	set_LCD_E		;
+	nop
+	nop
+	nop
+	clr_LCD_E
 	nop
 	nop
 	nop
 .endmacro
 
 .macro lcd_wait_busy		; read from LCD until BF is clear
-	clr r18
-	out DDRF, r17			; read from LCD
-	ldi r18, (0 << LCD_RS)|(1 << LCD_RW)
-	out PORTA, r18			; RS = =, RW = 1, cmd port read
+	clr r17
+	out DDRF, r17			; LCD port input
+	clr_LCD_RS
+	set_LCD_RW				; RS = 0, RW = 1, cmd port read
 busy:
 	nop						
-	sbi PORTA, LCD_E		; turn on enable pin
-	nop						; data delay
+	set_LCD_E				; turn on enable pin
+	nop						; r16 delay
 	nop
 	nop
-	in r18, PINF			; read value from LCD
-	cbi PORTA, LCD_E		; clear enable pin
-	sbrc r18, 7			; skip next if busy flag not set
+	in r17, PINF			; read value from LCD
+	clr_LCD_E				; clear enable pin
+	sbrc r17, 7			; skip next if busy flag not set
 	rjmp busy				; else loop
 
 	nop
 	nop
 	nop
-	clr r18
-	out PORTA, r18			; RS, RW = 0, IR write
-	ser r18
-	out DDRF, r18			; output to LCD
+	clr_LCD_RS
+	clr_LCD_RW				; RS, RW = 0, IR write
+	ser r17
+	out DDRF, r17			; LCD port output
 	nop
 	nop
+	nop
+.endmacro
+
+; expects digit in r19, ASCII '0' in r23
+.macro display_digit
+	add r19, r23              ; Convert to ASCII ('0' = 0x30)
+	rcall WRITE
+.endmacro
+
+;expects dividend in r26 and divisor in r25
+.macro divide
+	clr r27                   ; Clear quotient register
+divide_loop:
+    cp r26, r25               ; Compare r26 (dividend) with r25 (divisor)
+    brlo divide_done           ; If r26 < r25, exit loop
+
+    sub r26, r25              ; Subtract divisor from dividend
+    inc r27                   ; Increment quotient
+    rjmp divide_loop           ; Repeat until r26 < r28
+divide_done:
 	nop
 .endmacro
 
@@ -505,6 +558,7 @@ keypad_to_ascii:
 	pop		zl
 	ret
 
+; Initialise the LCD
 INITIALISE_LCD:
 	; prologue
 	push r16
@@ -523,11 +577,11 @@ INITIALISE_LCD:
 	clr r17
 	out PORTF, r17
 	out PORTA, r17
-	;
+	
 	ldi r18, low(15000)		; delay 15ms
 	ldi r19, high(15000)
 	delay
-	ldi r16, 0b00111000	; 2 x 5 x 7 r18 = 1, 8bits | N = 1, 2-line | F = 0, 5 x 7 dots
+	ldi r16, 0b00111000	    ; 2 x 5 x 7 r18 = 1, 8bits | N = 1, 2-line | F = 0, 5 x 7 dots
 	lcd_write_cmd			; 1st function cmd set
 
 	ldi r18, low(4100)		; delay 4.1ms
@@ -569,6 +623,439 @@ INITIALISE_LCD:
 	pop r18
 	pop r17
 	pop r16
+	ret
+
+; clears the LCD display 
+; and sets it to display mode
+LCD_DISPLAY_MODE:
+	; prologue
+	push r16
+	push r17
+	push r18
+	push r19
+	push YL
+	push YH
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 1
+	set_strobe				; STROBE on
+	
+	ldi r16, 0b00000001	    ; clear display
+	lcd_write_cmd
+	lcd_wait_busy
+
+	ldi r19, 'N'			; display "Next Patient:"
+	rcall WRITE
+	ldi r19, 'e'
+	rcall WRITE
+	ldi r19, 'x'
+	rcall WRITE
+	ldi r19, 't'
+	rcall WRITE
+	ldi r19, ' '
+	rcall WRITE
+	ldi r19, 'P'
+	rcall WRITE
+	ldi r19, 'a'
+	rcall WRITE
+	ldi r19, 't'
+	rcall WRITE
+	ldi r19, 'i'
+	rcall WRITE
+	ldi r19, 'e'
+	rcall WRITE
+	ldi r19, 'n'
+	rcall WRITE
+	ldi r19, 't'
+	rcall WRITE
+	ldi r19, ':'
+	rcall WRITE
+	
+	;epilogue
+	adiw Y, 1
+	out SPH, YH
+	out SPL, YL
+	pop YH
+	pop YL
+	pop r19
+	pop r18
+	pop r17
+	pop r16
+	ret
+
+; shifts cursor to bottom left of screen
+DISPLAY_BOTTOM_LEFT:
+	; prologue
+	push r16
+	push r17
+	push r18
+	push r19
+	push YL
+	push YH
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 1
+
+	ldi r16, 0b11000000	; Set DDRAM address to bottom left
+	lcd_write_cmd
+	lcd_wait_busy
+
+	;epilogue
+	adiw Y, 1
+	out SPH, YH
+	out SPL, YL
+	pop YH
+	pop YL
+	pop r19
+	pop r18
+	pop r17
+	pop r16
+	ret
+
+;expects unsigned int as parameter in r19 
+; and displays bottom right aligned number
+DISPLAY_NUMBER_RIGHT:
+	; prologue
+	push r16
+	push r17
+	push r18
+	push r19
+	push YL
+	push YH
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 1
+
+	ldi r16, 0b11001111	; Set DDRAM address to bottom right
+	lcd_write_cmd
+	lcd_wait_busy
+	ldi r16, 0b00000110	; INCREMENT, no shift
+	lcd_write_cmd
+	lcd_wait_busy
+	
+	cpi r19, 10
+	brsh tens
+	rjmp display
+tens:
+	ldi r16, 0b00010000	; shift cursor left 1
+	lcd_write_cmd
+	lcd_wait_busy
+	cpi r19, 100
+	brsh hundreds
+	rjmp display
+hundreds:
+	ldi r16, 0b00010000	; shift cursor left 1
+	lcd_write_cmd
+	lcd_wait_busy
+display:
+	mov r24, r19
+	rcall decimal_conversion
+	;epilogue
+	adiw Y, 1
+	out SPH, YH
+	out SPL, YL
+	pop YH
+	pop YL
+	pop r19
+	pop r18
+	pop r17
+	pop r16
+	ret
+
+; clears LCD display 
+; and sets it to entry mode
+LCD_ENTRY_MODE:
+	; prologue
+	push r16
+	push r17
+	push r18
+	push r19
+	push YL
+	push YH
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 1
+	clr_strobe				; STROBE on
+	
+	ldi r16, 0b00000001	    ; clear display
+	lcd_write_cmd
+	lcd_wait_busy
+
+	ldi r19, 'E'			; display "Next Patient:"
+	rcall WRITE
+	ldi r19, 'n'
+	rcall WRITE
+	ldi r19, 't'
+	rcall WRITE
+	ldi r19, 'e'
+	rcall WRITE
+	ldi r19, 'r'
+	rcall WRITE
+	ldi r19, ' '
+	rcall WRITE
+	ldi r19, 'N'
+	rcall WRITE
+	ldi r19, 'a'
+	rcall WRITE
+	ldi r19, 'm'
+	rcall WRITE
+	ldi r19, 'e'
+	rcall WRITE
+	ldi r19, ':'
+	rcall WRITE
+	
+	;epilogue
+	adiw Y, 1
+	out SPH, YH
+	out SPL, YL
+	pop YH
+	pop YL
+	pop r19
+	pop r18
+	pop r17
+	pop r16
+	ret
+
+; expects unsigned int as parameter in r19
+; and displays descriptive message to patient
+ENTRY_MESSAGE:
+	; prologue
+	push r16
+	push r17
+	push r18
+	push r19
+	push r24
+	push YL
+	push YH
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 1
+
+	ldi r16, 0b00000001	; clear display
+	lcd_write_cmd
+	lcd_wait_busy
+
+	mov r24, r19
+
+	ldi r19, 'Y'
+	rcall WRITE
+	ldi r19, 'o'
+	rcall WRITE
+	ldi r19, 'u'
+	rcall WRITE
+	ldi r19, ' '
+	rcall WRITE
+	ldi r19, 'a'
+	rcall WRITE
+	ldi r19, 'r'
+	rcall WRITE
+	ldi r19, 'e'
+	rcall WRITE
+	ldi r19, ' '
+	rcall WRITE
+	ldi r19, 'p'
+	rcall WRITE
+	ldi r19, 'a'
+	rcall WRITE
+	ldi r19, 't'
+	rcall WRITE
+	ldi r19, 'i'
+	rcall WRITE
+	ldi r19, 'e'
+	rcall WRITE
+	ldi r19, 'n'
+	rcall WRITE
+	ldi r19, 't'
+	rcall WRITE
+
+	rcall DISPLAY_BOTTOM_LEFT
+
+	ldi r19, 'n'
+	rcall WRITE
+	ldi r19, 'u'
+	rcall WRITE
+	ldi r19, 'm'
+	rcall WRITE
+	ldi r19, 'b'
+	rcall WRITE
+	ldi r19, 'e'
+	rcall WRITE
+	ldi r19, 'r'
+	rcall WRITE
+	ldi r19, ':'
+	rcall WRITE
+	ldi r19, ' '
+	rcall WRITE
+	rcall decimal_conversion
+	;epilogue
+	adiw Y, 1
+	out SPH, YH
+	out SPL, YL
+	pop YH
+	pop YL
+	pop r24
+	pop r19
+	pop r18
+	pop r17
+	pop r16
+	ret
+
+; delete 1 character from patient input in LCD entry mode
+BACKSPACE:
+	; prologue
+	push r16
+	push r17
+	push r18
+	push r19
+	push YL
+	push YH
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 1
+
+	ldi r16, 0b00010000	    ; shift cursor left 1
+	lcd_write_cmd
+	lcd_wait_busy
+
+	ldi r19, ' '			; delete letter
+	rcall WRITE
+
+	ldi r16, 0b00010000	    ; shift cursor left 1
+	lcd_write_cmd
+	lcd_wait_busy
+
+	;epilogue
+	adiw Y, 1
+	out SPH, YH
+	out SPL, YL
+	pop YH
+	pop YL
+	pop r19
+	pop r18
+	pop r17
+	pop r16
+	ret
+
+; expects an ASCII character in r19 and displays to current cursor position
+WRITE:
+	; write to r16
+	push r16
+	push r17
+	push YL
+	push YH
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 1
+
+	lcd_write_data
+	lcd_wait_busy
+
+	;epilogue
+	adiw Y, 1
+	out SPH, YH
+	out SPL, YL
+	pop YH
+	pop YL
+	pop r17
+	pop r16
+	ret
+
+; parameter passed into r24
+; conflict registers: 23, 25, 26, 27, 19
+decimal_conversion:
+;prologue
+	push r19
+	push r23
+	push r24
+	push r25
+	push r26
+	push r27
+	push YL
+	push YH
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 1
+
+	ldi r23, '0'				; load ASCII '0'
+	mov r26, r24				; Load result (y) r24 into register r26.
+
+	ldi r25, 100				; Load 100 for division
+    divide				; Call divide subroutine
+	mov r19, r27				; Get the quotient (hundreds digit) in r19
+    cpi r19, 0					; Check if it's zero
+	brne from_hundreds
+	rjmp no_hundreds
+
+from_hundreds:
+	display_digit
+	ldi r25, 10					; Load 10 for division
+    divide				; Call divide subroutine
+	mov r19, r27				; move quotient to r19
+	display_digit				; always display tens if from hundreds
+	rjmp display_ones_digit
+
+no_hundreds:
+	ldi r25, 10					; Load 10 for division
+    divide				; Call divide subroutine
+	cpi r27, 0                ; Check if it's zero
+	breq display_ones_digit
+	mov r19, r27
+	display_digit
+	rjmp display_ones_digit
+
+display_ones_digit:
+	mov r19, r26
+	display_digit
+
+	;epilogue
+	adiw Y, 1
+    out SPH, YH
+    out SPL, YL
+    pop YH
+    pop YL
+    pop r27
+    pop r26
+    pop r25
+	pop r24
+    pop r23
+    pop r19
+    ret
+
+; display the front patient in data memory to LCD display mode
+display_front_patient:
+	push YL
+	push YH
+	push ZL
+	push ZH
+	push r16
+	push r19
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 1
+
+	ldi ZH, high(first_patient)
+	ldi ZL, low(first_patient)
+	ld r19, Z+						; load lower byte of pID into r19
+	rcall DISPLAY_NUMBER_RIGHT		; display bottom righ aligned pID
+	adiw Z, 1						; skip over higher byte of pID
+	; loop over reamining 8 bytes of chars
+	ldi r16, 8
+display_loop:
+	ld r19, Z+
+	rcall write
+	dec r16
+	cpi r16, 0
+	brne display_loop
+	;epilogue
+	adiw Y, 1
+	out SPH, YH
+	out SPL, YL
+	pop r19
+	pop r16
+	pop ZH
+	pop ZL
+	pop YH
+	pop YL
 	ret
 
 ;______________________________________________________________________
