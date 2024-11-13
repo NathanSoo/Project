@@ -24,11 +24,11 @@
  <LABELS>
   <SecondCounter><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>24</LINE></SecondCounter>
   <TempCounter><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>25</LINE></TempCounter>
-  <reset><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>93</LINE></reset>
+  <reset><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>88</LINE></reset>
   <timer0ovf><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>36</LINE></timer0ovf>
-  <not_second><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>68</LINE></not_second>
-  <endif><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>71</LINE></endif>
-  <beep_beep><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>82</LINE></beep_beep>
-  <loop><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>109</LINE></loop>
+  <not_second><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>65</LINE></not_second>
+  <endif><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>68</LINE></endif>
+  <beep_beep><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>79</LINE></beep_beep>
+  <loop><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>106</LINE></loop>
  </LABELS>
 </ASSEMBLER_INFO>
