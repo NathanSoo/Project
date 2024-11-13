@@ -119,7 +119,11 @@ end_leds:
 			   cpi r24, 10
 			   brne store_second
 			   clr r24
-			   sts TIMSK0, r24
+			   sts TCCR1A, r24
+			   sts TCCR1B, r24
+			   sts TCNT1h, r24
+			   sts TCNT1l, r24
+			   sts TIMSK1, r24
 store_second:
 			   st Y, r25                ; Store the value of the second counter.
                st -Y, r24 
@@ -144,11 +148,11 @@ out PORTG, leds
  Clear TempCounter                
 Clear SecondCounter             
 ldi temp, 0b00000000
- out TCCR0A, temp
+ sts TCCR1A, temp
  ldi temp, 0b00000011
- out TCCR0B, temp                    
+ sts TCCR1B, temp                    
 ldi temp,  1<<TOIE0                
-sts TIMSK0, temp                  
+sts TIMSK1, temp                  
 sei                                                 
 loop:  
 rjmp loop
