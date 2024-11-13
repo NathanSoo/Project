@@ -8,7 +8,7 @@
 .include "m2560def.inc"
 
 .def w            = r16	; Working register
-.def motor_state  = r12 ; Stores state of motor (on/off)
+.def motor_state  = r18 ; Stores state of motor (on/off)
 
 ; The macro clears a word (2 bytes) in data memory for the counter
 ; The parameter @0 is the memory address for that word
@@ -82,6 +82,8 @@ beep_beep:
 	clear_word TempCounter
 	ldi w, 1<<TOIE0					; Enable Timer 0 overflow interrupt
 	sts TIMSK0, w
+	ldi motor_state, 0              ; Init motor off
+	sei                             ; Enable global interrupts
 	pop w
 	ret
 
@@ -92,17 +94,14 @@ reset:
 	ldi w, 0b00000011
 	out TCCR0B, w					; Prescaler value = 64
 	; Set Timer 5 for waveform generation
-	ldi w, 0b00111111
+	ldi w, 0b00001000
 	sts DDRL, w						; Set Pin 3, Port L as output pin
 	clr w
 	sts OCR5AH, w					; Set timer compare value to 0x4A
 	ldi w, 0x4A
-	sts OCR5AL, w     
+	sts OCR5AL, w   
 	ldi w, (1<< WGM50)|(1<<COM5A1)	; Set Timer 5 to Phase Correct PWM mode
 	sts TCCR5A, w
-	ldi w, (1<< WGM52)	
-	sts TCCR5B, w
 	rcall beep_beep
-	sei								; Enable global interrupts
 loop:
 	rjmp loop
