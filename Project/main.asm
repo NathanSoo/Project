@@ -114,10 +114,10 @@ last_patient:				.byte 2            ; Reserve space for Queue variables in data 
 	cbi PORTA, STROBE
 .endmacro
 
-.macro lcd_write_data		; write r16 to LCD, waits for BF
-	out PORTF, r19			; set r16 port
+.macro lcd_write_data			; write r16 to LCD, waits for BF
+	out PORTF, r19				; set r16 port
 	set_LCD_RS
-	clr_LCD_RW				; RS = 1, RW = 0 for r16 write
+	clr_LCD_RW					; RS = 1, RW = 0 for r16 write
 	nop
 	set_LCD_E		;
 	nop
@@ -129,29 +129,29 @@ last_patient:				.byte 2            ; Reserve space for Queue variables in data 
 	nop
 .endmacro
 
-.macro lcd_wait_busy		; read from LCD until BF is clear
+.macro lcd_wait_busy			; read from LCD until BF is clear
 	clr r17
-	out DDRF, r17			; LCD port input
+	out DDRF, r17				; LCD port input
 	clr_LCD_RS
-	set_LCD_RW				; RS = 0, RW = 1, cmd port read
+	set_LCD_RW					; RS = 0, RW = 1, cmd port read
 busy:
 	nop						
-	set_LCD_E				; turn on enable pin
-	nop						; r16 delay
+	set_LCD_E					; turn on enable pin
+	nop							; r16 delay
 	nop
 	nop
-	in r17, PINF			; read value from LCD
-	clr_LCD_E				; clear enable pin
-	sbrc r17, 7			; skip next if busy flag not set
-	rjmp busy				; else loop
+	in r17, PINF				; read value from LCD
+	clr_LCD_E					; clear enable pin
+	sbrc r17, 7					; skip next if busy flag not set
+	rjmp busy					; else loop
 
 	nop
 	nop
 	nop
 	clr_LCD_RS
-	clr_LCD_RW				; RS, RW = 0, IR write
+	clr_LCD_RW					; RS, RW = 0, IR write
 	ser r17
-	out DDRF, r17			; LCD port output
+	out DDRF, r17				; LCD port output
 	nop
 	nop
 	nop
@@ -159,34 +159,34 @@ busy:
 
 ; expects digit in r19, ASCII '0' in r23
 .macro display_digit
-	add r19, r23              ; Convert to ASCII ('0' = 0x30)
+	add r19, r23				; Convert to ASCII ('0' = 0x30)
 	rcall WRITE
 .endmacro
 
 ;expects dividend in r26 and divisor in r25
 .macro divide
-	clr r27                   ; Clear quotient register
+	clr r27                     ; Clear quotient register
 divide_loop:
-    cp r26, r25               ; Compare r26 (dividend) with r25 (divisor)
-    brlo divide_done           ; If r26 < r25, exit loop
+    cp r26, r25                 ; Compare r26 (dividend) with r25 (divisor)
+    brlo divide_done            ; If r26 < r25, exit loop
 
-    sub r26, r25              ; Subtract divisor from dividend
-    inc r27                   ; Increment quotient
-    rjmp divide_loop           ; Repeat until r26 < r28
+    sub r26, r25				; Subtract divisor from dividend
+    inc r27						; Increment quotient
+    rjmp divide_loop            ; Repeat until r26 < r28
 divide_done:
 	nop
 .endmacro
 
-.macro delay				; delay for 1us
+.macro delay					; delay for 1us
 loop1:
-	ldi r17, 3				; 1
+	ldi r17, 3					; 1
 loop2:
-	dec r17				; 1
-	nop						; 1
-	brne loop2				; 2 taken, 1 not ----> inner loop total is 11 cycles
-	subi r18, 1				; 1
-	sbci r19, 0				; 1
-	brne loop1				; 2 taken, each outer iteration is 11 + 1 + 1 + 1 + 2 = 16 clock cycles at 16Mhz = 1us
+	dec r17						; 1
+	nop							; 1
+	brne loop2					; 2 taken, 1 not ----> inner loop total is 11 cycles
+	subi r18, 1					; 1
+	sbci r19, 0					; 1
+	brne loop1					; 2 taken, each outer iteration is 11 + 1 + 1 + 1 + 2 = 16 clock cycles at 16Mhz = 1us
 .endmacro
 
 ; changes registers:
@@ -282,7 +282,8 @@ loop:
 	mov		key_pressed, r24
 
 	;	if entry_mode is false and key_pressed == 'A'
-	;		enter entry mode						
+	;		enter entry mode
+							
 	cp		entry_mode, zero
 	brne	not_display_mode
 	ldi		w, A
@@ -304,9 +305,7 @@ not_display_mode:
 	cp		key_pressed, w
 	brne	not_backspace
 	dec		new_name_cur					; new_name_cur --
-	
-	; TODO: lcd function to remove last character
-
+	rcall   BACKSPACE						; Clear last letter on LCD screen
 	ldi		w, null							; last_key_pressed = null
 	mov		last_key_pressed, w
 	clr		times_key_pressed				; times_key_pressed = 0
@@ -314,14 +313,12 @@ not_display_mode:
 
 not_backspace:
 	;		else if key_pressed == 'C'
-	;			clear button is pressed
+	;		clear button is pressed
 	ldi		w, C
 	cp		key_pressed, w
 	brne	not_clear
-	clr		new_name_cur					; new_name_cur = 0
-	
-	;  TODO: lcd function to clear name input area
-
+	clr		new_name_cur					; new_name_cur = 0	
+	rcall   LCD_ENTRY_MODE					; Clear LCD display
 	ldi		w, null							; last_key_pressed = null
 	mov		last_key_pressed, w
 	clr		times_key_pressed				; times_key_pressed = 0
@@ -354,7 +351,7 @@ not_clear:
 
 	; TODO: enter name into queue
 
-	ldi		w, high(new_name)			; initialise_array(new_name, 8)
+	ldi		w, high(new_name)				; initialise_array(new_name, 8)
 	mov		arg0, w
 
 	ldi		w, low(new_name)
@@ -370,6 +367,7 @@ not_clear:
 	mov		last_key_pressed, w
 	clr		times_key_pressed				; times_key_pressed = 0
 	clr		entry_mode						; entry_mode = false
+	rcall   LCD_DISPLAY_MODE				; Set LCD to display mode
 	rjmp	end_process_key
 
 not_enter:
@@ -489,7 +487,7 @@ initialise_array:
 
 	mov		r17, arg2
 
-	;rcall	INITIALISE_LCD
+	rcall	INITIALISE_LCD
 
 initialise_array_loop:
 	cp		r17, zero
@@ -498,7 +496,7 @@ initialise_array_loop:
 	;ld		r27, z
 	;cp		r27, zero
 	;breq	dont_write
-	;lcd_write_data
+	lcd_write_data
 	;lcd_wait_busy
 ;dont_write:
 	st		z+, zero
@@ -597,19 +595,19 @@ INITIALISE_LCD:
 	;
 	lcd_wait_busy			; wait until ready
 
-	ldi r16, 0b00001000	; LCD display off
+	ldi r16, 0b00001000	    ; LCD display off
 	lcd_write_cmd
 	lcd_wait_busy
 
-	ldi r16, 0b00000001	; LCD display clear
+	ldi r16, 0b00000001		; LCD display clear
 	lcd_write_cmd
 	lcd_wait_busy
 
-	ldi r16, 0b00000110	; increment, no shift
+	ldi r16, 0b00000110		; increment, no shift
 	lcd_write_cmd
 	lcd_wait_busy
 
-	ldi r16, 0b00001111	; LCD display on, cursor, blink
+	ldi r16, 0b00001111		; LCD display on, cursor, blink
 	lcd_write_cmd
 	lcd_wait_busy
 
@@ -696,7 +694,7 @@ DISPLAY_BOTTOM_LEFT:
 	in YH, SPH
 	sbiw Y, 1
 
-	ldi r16, 0b11000000	; Set DDRAM address to bottom left
+	ldi r16, 0b11000000		; Set DDRAM address to bottom left
 	lcd_write_cmd
 	lcd_wait_busy
 
@@ -712,7 +710,7 @@ DISPLAY_BOTTOM_LEFT:
 	pop r16
 	ret
 
-;expects unsigned int as parameter in r19 
+; expects unsigned int as parameter in r19 
 ; and displays bottom right aligned number
 DISPLAY_NUMBER_RIGHT:
 	; prologue
@@ -726,10 +724,10 @@ DISPLAY_NUMBER_RIGHT:
 	in YH, SPH
 	sbiw Y, 1
 
-	ldi r16, 0b11001111	; Set DDRAM address to bottom right
+	ldi r16, 0b11001111		; Set DDRAM address to bottom right
 	lcd_write_cmd
 	lcd_wait_busy
-	ldi r16, 0b00000110	; INCREMENT, no shift
+	ldi r16, 0b00000110		; INCREMENT, no shift
 	lcd_write_cmd
 	lcd_wait_busy
 	
@@ -737,14 +735,14 @@ DISPLAY_NUMBER_RIGHT:
 	brsh tens
 	rjmp display
 tens:
-	ldi r16, 0b00010000	; shift cursor left 1
+	ldi r16, 0b00010000		; shift cursor left 1
 	lcd_write_cmd
 	lcd_wait_busy
 	cpi r19, 100
 	brsh hundreds
 	rjmp display
 hundreds:
-	ldi r16, 0b00010000	; shift cursor left 1
+	ldi r16, 0b00010000		; shift cursor left 1
 	lcd_write_cmd
 	lcd_wait_busy
 display:
@@ -913,14 +911,14 @@ BACKSPACE:
 	in YH, SPH
 	sbiw Y, 1
 
-	ldi r16, 0b00010000	    ; shift cursor left 1
+	ldi r16, 0b00010000			; shift cursor left 1
 	lcd_write_cmd
 	lcd_wait_busy
 
-	ldi r19, ' '			; delete letter
+	ldi r19, ' '				; delete letter
 	rcall WRITE
 
-	ldi r16, 0b00010000	    ; shift cursor left 1
+	ldi r16, 0b00010000			; shift cursor left 1
 	lcd_write_cmd
 	lcd_wait_busy
 
@@ -980,7 +978,7 @@ decimal_conversion:
 	mov r26, r24				; Load result (y) r24 into register r26.
 
 	ldi r25, 100				; Load 100 for division
-    divide				; Call divide subroutine
+    divide						; Call divide subroutine
 	mov r19, r27				; Get the quotient (hundreds digit) in r19
     cpi r19, 0					; Check if it's zero
 	brne from_hundreds
@@ -989,15 +987,15 @@ decimal_conversion:
 from_hundreds:
 	display_digit
 	ldi r25, 10					; Load 10 for division
-    divide				; Call divide subroutine
+    divide						; Call divide subroutine
 	mov r19, r27				; move quotient to r19
 	display_digit				; always display tens if from hundreds
 	rjmp display_ones_digit
 
 no_hundreds:
 	ldi r25, 10					; Load 10 for division
-    divide				; Call divide subroutine
-	cpi r27, 0                ; Check if it's zero
+    divide						; Call divide subroutine
+	cpi r27, 0					; Check if it's zero
 	breq display_ones_digit
 	mov r19, r27
 	display_digit
@@ -1021,7 +1019,8 @@ display_ones_digit:
     pop r19
     ret
 
-; display the front patient in data memory to LCD display mode
+; display the front patient in data memory 
+; to LCD display mode
 display_front_patient:
 	push YL
 	push YH
@@ -1079,13 +1078,13 @@ scan_keypad:
 	ldi		w, KEYPADSIZE				; initialise keypad size
 	mov		r4, w
 	clr		r2							; clear column
-	ldi		r18, INITCOLMASK		; initialise column mask
+	ldi		r18, INITCOLMASK			; initialise column mask
 
 col_loop:
-	cp		r2, r4		; if maximum columns reached
+	cp		r2, r4						; if maximum columns reached
 	brlt	push_mask
-	ldi		r18, INITCOLMASK		; reset the column mask
-	clr		r2						; reset column count
+	ldi		r18, INITCOLMASK			; reset the column mask
+	clr		r2							; reset column count
 push_mask:
 	out		PORTC, r18
 	ldi		w, 0b11111111				; delay to allow pin to update
@@ -1098,30 +1097,30 @@ update_delay:
 	cpi		w, CHECKROWMASK
 	breq	nextcol						; check if any of the buttons are pressed
 
-	mov		r5, w					; save copy of inputs
-	clr		r3						; initialise row scan
+	mov		r5, w						; save copy of inputs
+	clr		r3							; initialise row scan
 	ldi		r17, INITROWMASK
 row_loop:
-	mov		w, r5					; get input value
-	and		w, r17					; mask out single bit
+	mov		w, r5						; get input value
+	and		w, r17						; mask out single bit
 	brne	inc_row						; if button pressed
 	debounce							; debounce button
 	in		w, PINC						; read port again
-	and		w, r17					; check value of pin again
+	and		w, r17						; check value of pin again
 	breq	resolve						; if button still pressed resolve value
 inc_row:
-	lsr		r17					; shift row mask
-	inc		r3						; increment row count
+	lsr		r17							; shift row mask
+	inc		r3							; increment row count
 	cp		r3, r4
 	brne	row_loop
 nextcol:
-	lsr		r18					; shift column mask right
-	sbr		r18, 0b10000000		; re-set left most bit
-	inc		r2						; increment column count
+	lsr		r18							; shift column mask right
+	sbr		r18, 0b10000000				; re-set left most bit
+	inc		r2							; increment column count
 	rjmp	col_loop
 
 resolve:
-	lsl		r3						; get key index by adding row * 4 + column
+	lsl		r3							; get key index by adding row * 4 + column
 	lsl		r3
 	mov		w, r3
 	add		w, r2
@@ -1139,7 +1138,7 @@ resolve:
 
 hold_loop:								; wait until button is unpressed before continuing to read keypad
 	in		w, PINC						; read port again
-	and		w, r17					; check value of pin again
+	and		w, r17						; check value of pin again
 	breq	hold_loop					; if button still pressed don't allow key to be continually read
 
 	pop		zh
