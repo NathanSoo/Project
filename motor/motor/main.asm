@@ -53,6 +53,12 @@ timer0ovf:
 	ldi  w, (1<<COM5A1)	            ; Toggle motor
 	eor  motor_state, w
 	sts  TCCR5A, motor_state
+	cpi  motor_state, 0
+	brne end_interrupt
+	ldi  w, 0
+	sts  TCNT5H, w
+	sts  TCNT5L, w
+end_interrupt:
 	clear_word TempCounter
 	ldi  YL, low(SecondCounter)		; Load the address of the second counter.
 	ldi  YH, high(SecondCounter)		
