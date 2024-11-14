@@ -68,6 +68,8 @@ timer0ovf:
 	ld	 r24, Y
 	cpi  r24, 1
 	breq do_beep_beep
+	cpi  r24, 2
+	breq do_bee_eep
 do_beep_beep:
 	ldi YH, high(BeepSeconds)
 	ldi YL, low(BeepSeconds)
@@ -77,6 +79,13 @@ do_beep_beep:
 	ldi w, 0b00001000				; Toggle motor on/off
 	eor motor_state, w
 	sts DDRL, motor_state
+	rjmp endif
+do_bee_eep:
+	ldi YH, high(BeepSeconds)
+	ldi YL, low(BeepSeconds)
+	ld  w, Y
+	cp  r19, w
+	breq end_beep_beep
 	rjmp endif
 end_beep_beep:
 	rcall init_beeps
@@ -107,6 +116,28 @@ beep_beep:
 	ldi  YH, high(BeepSeconds)
 	ldi  YL, low(BeepSeconds)
 	ldi  w, 10                      ; Number of seconds to beep for
+	st   Y, w
+	ldi  w, 1<<TOIE0				; Enable timer 0 overflow interrupt
+	sts  TIMSK0, w
+	ldi  w, 0b00001000
+	sts  DDRL, w					; Bit 3 will function as OC5A. (Motor on)
+	pop  w
+	pop  YL
+	pop  YH
+	ret
+
+; Play bee_eep tone for 3 seconds
+bee_eep:
+	push YH
+	push YL
+	push w
+	ldi  YH, high(BeepState)
+	ldi  YL, low(BeepState)
+	ldi  w, 2                       ; Store 2 for bee_eep mode
+	st   Y, w
+	ldi  YH, high(BeepSeconds)
+	ldi  YL, low(BeepSeconds)
+	ldi  w, 3                       ; Number of seconds to beep for
 	st   Y, w
 	ldi  w, 1<<TOIE0				; Enable timer 0 overflow interrupt
 	sts  TIMSK0, w
