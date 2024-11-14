@@ -7,12 +7,12 @@
 
 
 .include "m2560def.inc"
-.def pattern_index = r18
+.def pattern_index = r21
 .equ PATTERN_COUNT = 8
 
  .equ PATTERN=0b11110000
- .def temp=r16
- .def leds = r17
+ .def temp=r22
+ .def leds = r23
  ; The macro clears a word (2 bytes) in the data memory for the counter stored in the memory
  ; The parameter @0 is the memory address for that word 
 .macro Clear
