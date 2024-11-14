@@ -27,9 +27,9 @@ st Y, temp
  ; continued
  .dseg
 
- SecondCounter:
+ SecondCounterLED:
  .byte 2                   
-TempCounter: 
+TempcounterLEDLED: 
 .byte 2                   
 .cseg
  .org 0x0000 
@@ -44,7 +44,7 @@ jmp DEFAULT
 DEFAULT:  reti        
 ; Two-byte counter for counting the number of seconds.   
 ; Temporary counter. Used to determine 
-; if one second has passed (i.e. when TempCounter=1000)   
+; if one second has passed (i.e. when TempcounterLED=1000)   
 ; No handling for IRQ0.
  ; No handling for IRQ1.
  ; insert other interrupt vectors
@@ -73,8 +73,8 @@ PatternsE:
                push YL 
                push r25  
                push r24               ; Prologue ends.
-               ldi YL, low(TempCounter)    ; Load the address of  the temporary
-               ldi YH, high(TempCounter)   ; counter.
+               ldi YL, low(TempcounterLED)    ; Load the address of  the temporary
+               ldi YH, high(TempcounterLED)   ; counter.
                ld r24, Y+             ; Load the value of the temporary counter.
                ld r25, Y
                adiw r25:r24, 1    ; Increase the temporary counter by one
@@ -84,9 +84,9 @@ PatternsE:
               brne  NotSecond
               
       ;com leds       
-              Clear TempCounter  ; Reset the temporary counter.
-               ldi YL, low(SecondCounter)      ; Load the address of  the second
-               ldi YH, high(SecondCounter)    ; counter.
+              Clear TempcounterLED  ; Reset the temporary counter.
+               ldi YL, low(SecondCounterLED)      ; Load the address of  the second
+               ldi YH, high(SecondCounterLED)    ; counter.
                ld r24, Y+              ; Load the value of the second counter.
                ld r25, Y    
 			   
@@ -145,8 +145,8 @@ ldi leds, 0xff
 sts PORTK, leds
 out PORTG, leds
  ldi leds, PATTERN
- Clear TempCounter                
-Clear SecondCounter             
+ Clear TempcounterLED                
+Clear SecondCounterLED             
 ldi temp, 0b00000000
  sts TCCR2A, temp
  ldi temp, 0b00000011
