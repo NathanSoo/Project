@@ -22,7 +22,7 @@
 
 .dseg 
 SecondCounter:    .byte 2 ; Two byte counter for counting num_seconds
-TempCounter:	  .byte 2 ; Temporary counter used to determine if 1 second has passed
+wCounter:	  .byte 2 ; worary counter used to determine if 1 second has passed
 
 .cseg
 .org 0x0000
@@ -41,19 +41,25 @@ timer0ovf:
 	push YL
 	push r25
 	push r24						; Prologue ends
-	ldi  YL, low(TempCounter) 
-	ldi  YH, high(TempCounter)		; Y pointer points to temp counter
-	ld   r24, Y+					; Load the value of the temporary counter.
+	ldi  YL, low(wCounter) 
+	ldi  YH, high(wCounter)		; Y pointer points to w counter
+	ld   r24, Y+					; Load the value of the worary counter.
 	ld   r25, Y
-	adiw r25:r24, 1					; Increase the temporary counter by one.
+	adiw r25:r24, 1					; Increase the worary counter by one.
 	cpi  r24, low(1000)				; Check if (r25:r24)=1000
 	brne not_second
 	cpi  r25, high(1000)
 	brne not_second
-	ldi  w, (1 << CS50)				; Toggle Timer 5 (no pre-scaling)
-	eor  motor_state, w
-	sts  TCCR5B, motor_state
-	clear_word TempCounter
+
+	ldi w, 0b00000001				; Set Timer clock off
+	eor motor_state, w
+	sts TCCR5B, w
+	ldi w, 0
+	out PORTL, 0
+
+	; set timer scaling off
+	; set output pin to 0
+	clear_word wCounter
 	ldi  YL, low(SecondCounter)		; Load the address of the second counter.
 	ldi  YH, high(SecondCounter)		
 	ld   r24, Y+					; Load the value of the second counter.
@@ -81,21 +87,21 @@ reset:
 	out TCCR0A, w				    ; Set Timer 0 to Normal Mode
 	ldi w, 0b00000011
 	out TCCR0B, w					; Prescaler value = 64
-	ldi temp, 1<<TOIE0				; Enable timer overflow interrupt
-	sts TIMSK0, temp	
+	ldi w, 1<<TOIE0				; Enable timer overflow interrupt
+	sts TIMSK0, w	
 	sei								; Enable global interrupt
 	; Set Timer 5 for waveform generation
-	ldi temp, 0b00001000
-	sts DDRL, temp					; Bit 3 will function as OC5A.
-	clr temp						; the value controls the PWM duty cycle
-	sts OCR5AH, temp				; Set higher byte of OCR5A to 0
-	ldi temp, 0x4A        
-	sts OCR5AL, temp				; Set lower byte to 0x4A
+	ldi w, 0b00001000
+	out DDRL, w					; Bit 3 will function as OC5A.
+	clr w						; the value controls the PWM duty cycle
+	sts OCR5AH, w				; Set higher byte of OCR5A to 0
+	ldi w, 0x4A        
+	sts OCR5AL, w				; Set lower byte to 0x4A
 	; Set Timer5 to Phase Correct PWM mode.
-	ldi temp, 0b00001001			; Set Timer clock frequency (no prescaling)
-	sts TCCR5B, temp      
-	ldi temp, (1<< WGM50)|(1<<COM5A1) ; Phase correct PWM mode
-	sts TCCR5A, temp
-	ldi motor_state, 0b00000001		; Init motor on
+	ldi w, 0b00001001			; Set Timer clock frequency (no prescaling)
+	sts TCCR5B, w      
+	ldi w, (1<< WGM50)|(1<<COM5A1) ; Phase correct PWM mode
+	sts TCCR5A, w
+	ldi motor_state, 1			; Init motor state to 1
 loop:
 	rjmp loop
