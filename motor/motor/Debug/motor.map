@@ -1,5 +1,5 @@
 
-AVRASM ver. 2.2.8  C:\Users\ffordian\Documents\assign\motor\motor\main.asm Mon Nov 11 03:41:59 2024
+AVRASM ver. 2.2.8  C:\Users\user\Documents\Project\motor\motor\main.asm Wed Nov 13 22:33:21 2024
 
 
 EQU  SIGNATURE_000 0000001e
@@ -1360,12 +1360,12 @@ EQU  UDRE3addr    0000006e
 EQU  UTXC3addr    00000070
 EQU  INT_VECTORS_SIZE 00000072
 DEF  w            r16
-DEF  motor_state  r12
+DEF  motor_state  r18
 DSEG SecondCounter 00000200
 DSEG TempCounter  00000202
-CSEG reset        0000006b
+CSEG reset        0000006a
 CSEG timer0ovf    00000030
 CSEG not_second   00000051
 CSEG endif        00000053
 CSEG beep_beep    0000005b
-CSEG loop         0000007d
+CSEG loop         0000007e

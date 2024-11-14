@@ -67,14 +67,43 @@ first_patient:				.byte 2
 last_patient:				.byte 2  ; Reserve space for Queue variables in data memory
 is_keypad_timeout:			.byte 1
 
+pb0_state:					.byte 1
+pb1_state:					.byte 1
+which_pb					.byte 1
+
 
 .cseg
 .org 0x0000
 	rjmp	reset
 	nop
+	jmp		pb1
+	jmp		pb2
 
 .org OVF3addr
 	jmp		keypad_timeout
+.org OVF4addr
+	jmp		pb_timeout
+
+
+; expects digit in r19, ASCII '0' in r23
+.macro display_digit
+	add r19, r23				; Convert to ASCII ('0' = 0x30)
+	rcall WRITE
+.endmacro
+
+;expects dividend in r26 and divisor in r25
+.macro divide
+	clr r27                     ; Clear quotient register
+divide_loop:
+    cp r26, r25                 ; Compare r26 (dividend) with r25 (divisor)
+    brlo divide_done            ; If r26 < r25, exit loop
+
+    sub r26, r25				; Subtract divisor from dividend
+    inc r27						; Increment quotient
+    rjmp divide_loop            ; Repeat until r26 < r28
+divide_done:
+	nop
+.endmacro
 
 ; changes registers:
 ; zl
@@ -239,21 +268,6 @@ loop2:
 	brne loop1				; 2 taken, each outer iteration is 11 + 1 + 1 + 1 + 2 = 16 clock cycles at 16Mhz = 1us
 .endmacro
 
-; CAN DELETE
-.macro long_delay
-	ldi r16, 20
-l1:
-	ldi r18, low(65000)		; delay 65ms
-	ldi r19, high(65000)
-	delay
-	dec r16
-	brne loop_jmp
-	rjmp no_jmp
-loop_jmp:
-	rjmp l1
-no_jmp:
-.endmacro
-
 ;______________________________________________________________________
 ; INITIALISE
 ;______________________________________________________________________
@@ -329,7 +343,8 @@ loop:
 
 no_timeout:
 	;	if entry_mode is false and key_pressed == 'A'
-	;		enter entry mode						
+	;		enter entry mode
+							
 	cp		entry_mode, zero
 	brne	not_display_mode
 	ldi		w, A
@@ -363,7 +378,6 @@ not_display_mode:
 
 	st		z, zero
 
-
 	rcall	BACKSPACE
 
 	ldi		w, null							; last_key_pressed = null
@@ -373,7 +387,7 @@ not_display_mode:
 
 not_backspace:
 	;		else if key_pressed == 'C'
-	;			clear button is pressed
+	;		clear button is pressed
 	ldi		w, C
 	cp		key_pressed, w
 	brne	not_clear
@@ -417,6 +431,7 @@ not_clear:
 	mov		last_key_pressed, w
 	clr		times_key_pressed				; times_key_pressed = 0
 	clr		entry_mode						; entry_mode = false
+	rcall   LCD_DISPLAY_MODE				; Set LCD to display mode
 	rjmp	end_process_key
 
 not_enter:
@@ -551,11 +566,18 @@ initialise_array:
 
 	mov		r17, arg2
 
-	;rcall	INITIALISE_LCD
+	rcall	INITIALISE_LCD
 
 initialise_array_loop:
 	cp		r17, zero
 	breq	end_initialise_array_loop
+
+	;ld		r27, z
+	;cp		r27, zero
+	;breq	dont_write
+	;lcd_write_data
+	;lcd_wait_busy
+;dont_write:
 	st		z+, zero
 
 	dec		r17
@@ -634,13 +656,13 @@ scan_keypad:
 	ldi		w, KEYPADSIZE				; initialise keypad size
 	mov		r4, w
 	clr		r2							; clear column
-	ldi		r18, INITCOLMASK		; initialise column mask
+	ldi		r18, INITCOLMASK			; initialise column mask
 
 col_loop:
-	cp		r2, r4		; if maximum columns reached
+	cp		r2, r4						; if maximum columns reached
 	brlt	push_mask
-	ldi		r18, INITCOLMASK		; reset the column mask
-	clr		r2						; reset column count
+	ldi		r18, INITCOLMASK			; reset the column mask
+	clr		r2							; reset column count
 push_mask:
 	out		PORTC, r18
 	ldi		w, 0b11111111				; delay to allow pin to update
@@ -653,30 +675,30 @@ update_delay:
 	cpi		w, CHECKROWMASK
 	breq	nextcol						; check if any of the buttons are pressed
 
-	mov		r5, w					; save copy of inputs
-	clr		r3						; initialise row scan
+	mov		r5, w						; save copy of inputs
+	clr		r3							; initialise row scan
 	ldi		r17, INITROWMASK
 row_loop:
-	mov		w, r5					; get input value
-	and		w, r17					; mask out single bit
+	mov		w, r5						; get input value
+	and		w, r17						; mask out single bit
 	brne	inc_row						; if button pressed
 	debounce							; debounce button
 	in		w, PINC						; read port again
-	and		w, r17					; check value of pin again
+	and		w, r17						; check value of pin again
 	breq	resolve						; if button still pressed resolve value
 inc_row:
-	lsr		r17					; shift row mask
-	inc		r3						; increment row count
+	lsr		r17							; shift row mask
+	inc		r3							; increment row count
 	cp		r3, r4
 	brne	row_loop
 nextcol:
-	lsr		r18					; shift column mask right
-	sbr		r18, 0b10000000		; re-set left most bit
-	inc		r2						; increment column count
+	lsr		r18							; shift column mask right
+	sbr		r18, 0b10000000				; re-set left most bit
+	inc		r2							; increment column count
 	rjmp	col_loop
 
 resolve:
-	lsl		r3						; get key index by adding row * 4 + column
+	lsl		r3							; get key index by adding row * 4 + column
 	lsl		r3
 	mov		w, r3
 	add		w, r2
@@ -685,7 +707,7 @@ resolve:
 
 hold_loop:								; wait until button is unpressed before continuing to read keypad
 	in		w, PINC						; read port again
-	and		w, r17					; check value of pin again
+	and		w, r17						; check value of pin again
 	breq	hold_loop					; if button still pressed don't allow key to be continually read
 
 	pop		zh
@@ -720,6 +742,17 @@ delete:
 	pop  ZH
 	pop  ZL
 	ret
+
+; Returns length of queue in r25:r24
+get_queue_len:
+	push YL
+	push YH
+	ldi  YH, high(num_patients)
+	ldi  YL, low(num_patients)
+	ld   r24, Y+
+	ld   r25, Y                 ; Stores queue length (num_patients) in r25:r24
+	pop  YH
+	pop  YL
 
 ; Enqueues new patient
 ; Assigns pid and returns pointer to location of
@@ -827,7 +860,248 @@ clear_pt_loop:
 	pop YH
 	ret
 
+;	; push button interrupts TODO change functionality
+;	ldi		w, (0b10 << ISC00)
+;	ori		w, (0b10 << ISC10)
+;	sts		EICRA, w
+;	out		PORTB, w
+;
+;	in		w, EIMSK
+;	ori		w, (1 << INT0)
+;	ori		w, (1 << INT1)
+;	out		EIMSK, w
 
+pb0:
+	push	zl
+	push	zh
+	push	w
+	push	r17
+	push	r18
+	push	zero
+
+	in		r17, sreg
+
+	debounce
+
+	clr		zero
+
+	ldi		zh, high(pb0_state)
+	ldi		zl, low(pb0_state)
+
+	ld		r18, z
+
+pb0_state0:
+	cpi		r18, 0
+	brne	pb0_state1
+
+	; call next patient
+
+	; enable push button 1 (cancel appointment)
+	ldi		zh, high(pb1_state)
+	ldi		zl, low(pb1_state)
+	st		z, zero
+
+	lds		w, EICRA
+	andi	w, 0b11110011
+	ori		w, (0b10 << ISC10)
+	sts		EICRA, w
+
+	in		w, EIMSK
+	ori		w, (1 << INT1)
+	out		EIMSK, w
+
+	; change push button state to 2
+	inc		r18
+	st		z, r18
+
+	rjmp	pb0_state_end
+pb0_state1:
+	cpi		r18, 1
+	brne	pb0_state2
+
+	; start timer for 1 second
+	sts		TCNT4h, zero
+	sts		TCNT4l, zero
+	ldi		w, 0b00000100
+	sts		TCCR4B, w
+	ldi		w, (1 << TOIE4)
+	sts		TIMSK4, w
+
+	; change push button to release
+	lds		w, EICRA
+	andi	w, 0b11111100
+	ori		w, (0b11 << ISC00)
+	sts		EICRA, w
+	
+	; change push button state to 2
+	inc		r18
+	st		z, r18
+
+	; set timer functionality
+	ldi		zh, high(which_pb)
+	ldi		zl, low(which_pb)
+	st		z, zero
+
+	rjmp	pb0_state_end
+pb0_state2:
+	cpi		r18, 2
+	brne	pb0_state_end
+	
+	; turn off timer
+	sts		TCCR4B, zero
+	sts		TIMSK4, zero
+
+	; change push button to push down
+	lds		w, EICRA
+	andi	w, 0b11111100
+	ori		w, (0b10 << ISC00)
+	sts		EICRA, w
+
+	; return push button state to 1
+	ldi		r18, 1
+	st		z, r18
+pb0_state_end:
+
+	out		sreg, r17
+
+	pop		zero
+	pop		r18
+	pop		r17
+	pop		w
+	pop		zh
+	pop		zl
+	reti
+
+pb1:
+	push	zl
+	push	zh
+	push	w
+	push	r17
+	push	r18
+	push	zero
+
+	in		r17, sreg
+
+	debounce
+
+	clr		zero
+
+	ldi		zh, high(pb1_state)
+	ldi		zl, low(pb1_state)
+
+	ld		r18, z
+
+pb1_state0:
+	cpi		r18, 0
+	brne	pb1_state1
+
+	; start timer for 1 second
+	sts		TCNT4h, zero
+	sts		TCNT4l, zero
+	ldi		w, 0b00000100
+	sts		TCCR4B, w
+	ldi		w, (1 << TOIE4)
+	sts		TIMSK4, w
+
+	; change push button to release
+	lds		w, EICRA
+	andi	w, 0b11110011
+	ori		w, (0b11 << ISC10)
+	sts		EICRA, w
+	
+	; change push button state to 1
+	inc		r18
+	st		z, r18
+
+	; set timer functionality
+	ldi		zh, high(which_pb)
+	ldi		zl, low(which_pb)
+	ldi		w, 1
+	st		z, w
+
+	rjmp	pb1_state_end
+pb1_state1:
+	cpi		r18, 1
+	brne	pb1_state_end
+	
+	; turn off timer
+	sts		TCCR4B, zero
+	sts		TIMSK4, zero
+
+	; change push button to push down
+	lds		w, EICRA
+	andi	w, 0b11110011
+	ori		w, (0b10 << ISC10)
+	sts		EICRA, w
+
+	; return push button state to 0
+	st		z, zero
+pb1_state_end:
+
+	out		sreg, r17
+
+	pop		zero
+	pop		r18
+	pop		r17
+	pop		w
+	pop		zh
+	pop		zl
+	reti
+
+pb_timeout
+	push	zl
+	push	zh
+	push	w
+	push	r17
+	push	zero
+	push	r18
+
+	in		r17, sreg
+
+	clr		zero
+
+	ldi		zh, high(which_pb)
+	ldi		zl, low(which_pb)
+
+	ld		r18, z
+
+timeout_pb0:
+	cpi		r18, 0
+	brne	timeout_pb1
+
+	; pop patient from queue
+
+	rjmp	end_timeout_sel
+timeout_pb1:
+	cpi		r18, 1
+	brne	end_timeout_sel
+
+	; 
+
+end_timeout_sel:
+
+	; stop calling patient
+
+	; remove pb1 interrupt
+	in		w, EIMSK
+	andi	w, 0b11111101	
+	out		EIMSK, w
+
+	; reset pb0 interrupt
+
+	; turn off timer
+	sts		TCCR4B, zero
+	sts		TIMSK4, zero
+
+	out		sreg, r17
+
+	pop		r18
+	pop		zero
+	pop		r17
+	pop		w
+	pop		zh
+	pop		zl
+	reti
 
 keypad_timeout:
 	push	zl
@@ -1281,23 +1555,23 @@ WRITE:
 	ret
 
 ; expects digit in r19, ASCII '0' in r23
-.macro display_digit
-	add r19, r23              ; Convert to ASCII ('0' = 0x30)
-	rcall WRITE
-.endmacro
-;expects dividend in r26 and divisor in r25
-.macro divide
-	clr r27                   ; Clear quotient register
-divide_loop:
-    cp r26, r25               ; Compare r26 (dividend) with r25 (divisor)
-    brlo divide_done           ; If r26 < r25, exit loop
-
-    sub r26, r25              ; Subtract divisor from dividend
-    inc r27                   ; Increment quotient
-    rjmp divide_loop           ; Repeat until r26 < r28
-divide_done:
-	nop
-.endmacro
+;.macro display_digit
+;	add r19, r23              ; Convert to ASCII ('0' = 0x30)
+;	rcall WRITE
+;.endmacro
+;;expects dividend in r26 and divisor in r25
+;.macro divide
+;	clr r27                   ; Clear quotient register
+;divide_loop:
+;    cp r26, r25               ; Compare r26 (dividend) with r25 (divisor)
+;    brlo divide_done           ; If r26 < r25, exit loop
+;
+;    sub r26, r25              ; Subtract divisor from dividend
+;    inc r27                   ; Increment quotient
+;    rjmp divide_loop           ; Repeat until r26 < r28
+;divide_done:
+;	nop
+;.endmacro
 ; parameter passed into r24
 ; conflict registers: 23, 25, 26, 27, 19
 decimal_conversion:

@@ -15,6 +15,7 @@
 ; ENTRY_MESSAGE			: takes unsigned int as parameter in r19 and displays descriptive message showing patient number
 ; BACKSPACE				: delete 1 char from patient input
 ; WRITE					: write 1 char to LCD at current cursor position
+; display_front_patient	: peeks at the front of the queue and writes the patient name and pID to LCD display mode
 ; decimal_conversion	: shouldn't need to use this since i integrated the decimal conversion into all the LCD places,
 ;						: ENTRY_MESSAGE and DISPLAY_NUMBER_RIGHT should cover all use cases for displaying numbers on LCD
 ; Replace with your application code
@@ -124,7 +125,7 @@ loop2:
 
 ; CAN DELETE
 .macro long_delay
-	ldi r16, 20
+	ldi r16, 100
 l1:
 	ldi r18, low(65000)		; delay 65ms
 	ldi r19, high(65000)
@@ -226,7 +227,7 @@ INITIALISE_LCD:
 	lcd_write_cmd
 	lcd_wait_busy
 
-	ldi r16, 0b00001100	; LCD display on, no cursor, blink
+	ldi r16, 0b00001110	; LCD display on, cursor on, blink
 	lcd_write_cmd
 	lcd_wait_busy
 
@@ -652,3 +653,40 @@ display_ones_digit:
     pop r23
     pop r19
     ret
+
+; display the front patient in data memory to LCD display mode
+display_front_patient:
+	push YL
+	push YH
+	push ZL
+	push ZH
+	push r16
+	push r19
+	in YL, SPL
+	in YH, SPH
+	sbiw Y, 1
+
+	ldi ZH, high(first_patient)
+	ldi ZL, low(first_patient)
+	ld r19, Z+						; load lower byte of pID into r19
+	rcall DISPLAY_NUMBER_RIGHT		; display bottom righ aligned pID
+	adiw Z, 1						; skip over higher byte of pID
+	; loop over reamining 8 bytes of chars
+	ldi r16, 8
+display_loop:
+	ld r19, Z+
+	rcall write
+	dec r16
+	cpi r16, 0
+	brne display_loop
+	;epilogue
+	adiw Y, 1
+	out SPH, YH
+	out SPL, YL
+	pop r19
+	pop r16
+	pop ZH
+	pop ZL
+	pop YH
+	pop YL
+	ret

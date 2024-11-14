@@ -1,0 +1,34 @@
+<ASSEMBLER_INFO>
+ <VERSION>2.2.8</VERSION>
+ <DEVICE>"ATmega2560"</DEVICE>
+ <WORKING_DIR>C:\Users\user\Documents\Project\motor\motor\Debug</WORKING_DIR>
+ <INCLUDE_PATH>
+  <DIR>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc</DIR>
+  <DIR>C:\Program Files (x86)\Atmel\Studio\7.0\toolchain\avr8\avrassembler\Include</DIR>
+  <DIR></DIR>
+ </INCLUDE_PATH>
+ <SOURCE_FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</SOURCE_FILE>
+ <INCLUDED_FILES>
+  <FILE>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc</FILE>
+ </INCLUDED_FILES>
+ <OBJECT_FILES>
+  <FILE>C:\Users\user\Documents\Project\motor\motor\Debug\motor.obj</FILE>
+ </OBJECT_FILES>
+ <HEX_FILES>
+  <FILE>motor.hex</FILE>
+ </HEX_FILES>
+ <OUTPUT_FILES>
+  <FILE>motor.map</FILE>
+  <FILE>motor.lss</FILE>
+ </OUTPUT_FILES>
+ <LABELS>
+  <SecondCounter><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>24</LINE></SecondCounter>
+  <TempCounter><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>25</LINE></TempCounter>
+  <reset><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>88</LINE></reset>
+  <timer0ovf><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>36</LINE></timer0ovf>
+  <not_second><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>65</LINE></not_second>
+  <endif><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>68</LINE></endif>
+  <beep_beep><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>79</LINE></beep_beep>
+  <loop><FILE>C:\Users\user\Documents\Project\motor\motor\main.asm</FILE><LINE>106</LINE></loop>
+ </LABELS>
+</ASSEMBLER_INFO>
