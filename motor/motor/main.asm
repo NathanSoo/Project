@@ -50,15 +50,9 @@ timer0ovf:
 	brne not_second
 	cpi  r25, high(1000)
 	brne not_second
-	ldi  w, (1<<COM5A1)	            ; Toggle motor
+	ldi  w, (1 << CS50)				; Toggle Timer 5 (no pre-scaling)
 	eor  motor_state, w
-	sts  TCCR5A, motor_state
-	cpi  motor_state, 0
-	brne end_interrupt
-	ldi  w, 0
-	sts  TCNT5H, w
-	sts  TCNT5L, w
-end_interrupt:
+	sts  TCCR5B, motor_state
 	clear_word TempCounter
 	ldi  YL, low(SecondCounter)		; Load the address of the second counter.
 	ldi  YH, high(SecondCounter)		
@@ -81,35 +75,27 @@ endif:
 	pop  w
 	reti
 
-; Motor on for 1 second, off 1 second
-beep_beep:
-	push w
-	clear_word SecondCounter
-	clear_word TempCounter
-	ldi  motor_state, (1<<COM5A1)   ; Init motor on
-	ldi  w, (1<< WGM50)|(1<<COM5A1)	; Set Timer 5 to Phase Correct PWM mode
-	sts  TCCR5A, w
-	pop  w
-	ret
-
 reset:
 	; Set Timer 0 to count seconds
 	clr w
 	out TCCR0A, w				    ; Set Timer 0 to Normal Mode
 	ldi w, 0b00000011
 	out TCCR0B, w					; Prescaler value = 64
-	ldi w, 1<<TOIE0					; Enable Timer 0 overflow interrupt
-	sts TIMSK0, w
-	sei                             ; Enable global interrupts
+	ldi temp, 1<<TOIE0				; Enable timer overflow interrupt
+	sts TIMSK0, temp	
+	sei								; Enable global interrupt
 	; Set Timer 5 for waveform generation
-	ldi w, 0b00001000
-	sts DDRL, w						; Set Pin 3, Port L as output pin
-	ldi w, (1 << CS50)				; Toggle Timer 5 (no pre-scaling)
-	sts TCCR5B, w
-	clr w
-	sts OCR5AH, w					; Set timer compare value to 0x4A
-	ldi w, 0x4A
-	sts OCR5AL, w   
-	rcall beep_beep
+	ldi temp, 0b00001000
+	sts DDRL, temp					; Bit 3 will function as OC5A.
+	clr temp						; the value controls the PWM duty cycle
+	sts OCR5AH, temp				; Set higher byte of OCR5A to 0
+	ldi temp, 0x4A        
+	sts OCR5AL, temp				; Set lower byte to 0x4A
+	; Set Timer5 to Phase Correct PWM mode.
+	ldi temp, 0b00001001			; Set Timer clock frequency (no prescaling)
+	sts TCCR5B, temp      
+	ldi temp, (1<< WGM50)|(1<<COM5A1) ; Phase correct PWM mode
+	sts TCCR5A, temp
+	ldi motor_state, 0b00000001		; Init motor on
 loop:
 	rjmp loop
