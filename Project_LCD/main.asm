@@ -675,10 +675,13 @@ display_front_patient:
 	ldi r16, 8
 display_loop:
 	ld r19, Z+
+	cpi r19, 0
+	breq end_display
 	rcall write
 	dec r16
 	cpi r16, 0
 	brne display_loop
+end_display:
 	;epilogue
 	adiw Y, 1
 	out SPH, YH
