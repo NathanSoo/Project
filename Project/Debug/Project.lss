@@ -1,5 +1,5 @@
 
-AVRASM ver. 2.2.8  C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm Thu Nov 14 13:49:16 2024
+AVRASM ver. 2.2.8  C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm Thu Nov 14 14:43:40 2024
 
 [builtin](2): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc'
 C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm(15): Including file 'C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc'
@@ -1943,34 +1943,53 @@ C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm
                                  .def arg0					= r10
                                  .def arg1					= r11
                                  .def arg2					= r12
+                                 .def motor_state			= r20 ; Stores state of motor (on/off)
                                  
                                  .dseg								; Start the data segment
                                  .org 0x0200							; from address 0x0200
                                  
-000200                           new_name:					.byte max_name            ; Queue functions assume 8 bytes for name
-000208                           num_patients:				.byte 2
-00020a                           init_pid:					.byte 2                                  
-00020c                           first_patient:				.byte 2                 
-00020e                           last_patient:				.byte 2  ; Reserve space for Queue variables in data memory
-000210                           is_keypad_timeout:			.byte 1
+000200                           pb0_state:					.byte 1
+000201                           pb1_state:					.byte 1
+000202                           which_pb:					.byte 1
+000203                           TempCounter:				.byte 2 ; Temporary counter used to determine if 1 second has passed
+000205                           SecondCounter:				.byte 1 ; Counter to store seconds
+000206                           BeepCounter:				.byte 1 ; Counter for keeping track of times beeped
+000207                           BeepState:					.byte 1 ; Maintains state for beep routines
+000208                           BeepSeconds:				.byte 1 ; Stores number of seconds for motor to beep
+000209                           is_keypad_timeout:			.byte 1
                                  
-000211                           pb0_state:					.byte 1
-000212                           pb1_state:					.byte 1
-000213                           which_pb:					.byte 1
+00020a                           new_name:					.byte max_name            ; Queue functions assume 8 bytes for name
+000212                           num_patients:				.byte 2
+000214                           init_pid:					.byte 2                                  
+000216                           first_patient:				.byte 2                 
+000218                           last_patient:				.byte 2  ; Reserve space for Queue variables in data memory
+                                 
+                                 
                                  
                                  
                                  .cseg
                                  .org 0x0000
 000000 c05b                      	rjmp	reset
 000001 0000                      	nop
-000002 940c 021f                 	jmp		pb0_ih
-000004 940c 0279                 	jmp		pb1_ih
+000002 940c 0231                 	jmp		pb0_ih
+000004 940c 0287                 	jmp		pb1_ih
                                  
+                                 .org OVF0addr
+00002e 940c 06e0                 	jmp		timer0ovf
                                  .org OVF3addr
-000046 940c 02e2                 	jmp		keypad_timeout
+000046 940c 02ed                 	jmp		keypad_timeout
                                  .org OVF4addr
-00005a 940c 02b8                 	jmp		pb_timeout
+00005a 940c 02c1                 	jmp		pb_timeout
                                  
+                                 ; The macro clears a word (2 bytes) in data memory for the counter
+                                 ; The parameter @0 is the memory address for that word
+                                 .macro clear_word
+                                 	ldi YL, low(@0)  ; load the memory address to Y
+                                 	ldi YH, high(@0)
+                                 	clr w
+                                 	st Y+, w		; clear the two bytes at @0 in SRAM
+                                 	st Y, w
+                                 .endmacro
                                  
                                  ; expects digit in r19, ASCII '0' in r23
                                  .macro display_digit
@@ -2160,7 +2179,7 @@ C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm
                                  ;______________________________________________________________________
                                  reset:
 00005c e0d2
-00005d e0c8
+00005d e1c2
 00005e 2788
 00005f 2799
 000060 9389
@@ -2174,305 +2193,322 @@ C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm
 000068 9389
 000069 9399
 00006a e092
-00006b e08a
+00006b e184
 00006c 9389
 00006d 8398                      	init_queue
-00006e d29b                      	rcall	INITIALISE_LCD
-00006f d3a6                      	rcall	LCD_DISPLAY_MODE
-000070 d134                      	rcall	clear_name
+00006e d6dd                      	rcall init_beeps
+                                 	; Set Timer 0 to count seconds
+00006f 2700                      	clr w
+000070 bd04                      	out TCCR0A, w				    ; Set Timer 0 to Normal Mode
+000071 e003                      	ldi w, 0b00000011
+000072 bd05                      	out TCCR0B, w					; Prescaler value = 64	
+000073 9478                      	sei								; Enable global interrupt
+                                 	; Set Timer 5 for waveform generation
+000074 2700                      	clr w						; the value controls the PWM duty cycle
+000075 9300 0129                 	sts OCR5AH, w				; Set higher byte of OCR5A to 0
+000077 e40a                      	ldi w, 0x4A        
+000078 9300 0128                 	sts OCR5AL, w				; Set lower byte to 0x4A
+                                 	; Set Timer5 to Phase Correct PWM mode.
+00007a e009                      	ldi w, 0b00001001			; Set Timer clock frequency (no prescaling)
+00007b 9300 0121                 	sts TCCR5B, w      
+00007d e801                      	ldi w, (1<< WGM50)|(1<<COM5A1) ; Phase correct PWM mode
+00007e 9300 0120                 	sts TCCR5A, w
+000080 d294                      	rcall	INITIALISE_LCD
+000081 d39f                      	rcall	LCD_DISPLAY_MODE
+000082 d134                      	rcall	clear_name
                                  
-000071 2455                      	clr		zero
+000083 2455                      	clr		zero
                                  
-000072 ef00                      	ldi		w, PORTCDIR					; initialise pin directions
-000073 b907                      	out		DDRC, w
-000074 e00f                      	ldi		w, PORTBDIR
-000075 b904                      	out		DDRB, w
+000084 ef00                      	ldi		w, PORTCDIR					; initialise pin directions
+000085 b907                      	out		DDRC, w
+000086 e00f                      	ldi		w, PORTBDIR
+000087 b904                      	out		DDRB, w
                                  
-000076 ef0f                      	ldi		w, null						; initialise last key pressed
-000077 2e60                      	mov		last_key_pressed, w
+000088 ef0f                      	ldi		w, null						; initialise last key pressed
+000089 2e60                      	mov		last_key_pressed, w
                                  
-000078 2477                      	clr		times_key_pressed			; initialise times last key pressed
-000079 2422                      	clr		entry_mode
+00008a 2477                      	clr		times_key_pressed			; initialise times last key pressed
+00008b 2422                      	clr		entry_mode
                                  
-00007a e002                      	ldi		w, high(new_name)
-00007b 2ea0                      	mov		arg0, w
+00008c e002                      	ldi		w, high(new_name)
+00008d 2ea0                      	mov		arg0, w
                                  
-00007c e000                      	ldi		w, low(new_name)
-00007d 2eb0                      	mov		arg1, w
+00008e e00a                      	ldi		w, low(new_name)
+00008f 2eb0                      	mov		arg1, w
                                  
-00007e e008                      	ldi		w, max_name
-00007f 2ec0                      	mov		arg2, w
+000090 e008                      	ldi		w, max_name
+000091 2ec0                      	mov		arg2, w
                                  
-000080 d0b8                      	rcall	initialise_array
+000092 d0b8                      	rcall	initialise_array
                                  
-000081 2433                      	clr		new_name_cur
-000082 2488                      	clr		is_timer_active
+000093 2433                      	clr		new_name_cur
+000094 2488                      	clr		is_timer_active
                                  
-000083 e000                      	ldi		w, 0b00000000
-000084 9300 0090                 	sts		TCCR3A, w
-000086 e000                      	ldi		w, 0b00000000
-000087 9300 0091                 	sts		TCCR3B, w
+000095 e000                      	ldi		w, 0b00000000
+000096 9300 0090                 	sts		TCCR3A, w
+000098 e000                      	ldi		w, 0b00000000
+000099 9300 0091                 	sts		TCCR3B, w
                                  
-000089 9250 0071                 	sts		TIMSK3, zero
+00009b 9250 0071                 	sts		TIMSK3, zero
                                  
-00008b e0f2                      	ldi		zh, high(is_keypad_timeout)
-00008c e1e0                      	ldi		zl, low(is_keypad_timeout)
-00008d 8250                      	st		z, zero
+00009d e0f2                      	ldi		zh, high(is_keypad_timeout)
+00009e e0e9                      	ldi		zl, low(is_keypad_timeout)
+00009f 8250                      	st		z, zero
                                  
-00008e 9478                      	sei
+0000a0 9478                      	sei
                                  
                                  ;______________________________________________________________________
                                  ; MAIN LOOP
                                  ;______________________________________________________________________
                                  loop:
-00008f d0d3                      	rcall	scan_keypad					; poll until key is pressed then return key index in r24
-000090 2e48                      	mov		key_pressed, r24
+0000a1 d0d3                      	rcall	scan_keypad					; poll until key is pressed then return key index in r24
+0000a2 2e48                      	mov		key_pressed, r24
                                  
-000091 9250 0091                 	sts		TCCR3B, zero
-000093 9250 0071                 	sts		TIMSK3, zero					; disable keypad timeout temporarily
+0000a3 9250 0091                 	sts		TCCR3B, zero
+0000a5 9250 0071                 	sts		TIMSK3, zero					; disable keypad timeout temporarily
                                  
-000095 e0f2                      	ldi		zh, high(is_keypad_timeout)
-000096 e1e0                      	ldi		zl, low(is_keypad_timeout)
-000097 8100                      	ld		w, z
-000098 1505                      	cp		w, zero
-000099 f031                      	breq	no_timeout
-00009a 8250                      	st		z, zero
-00009b 9433                      	inc		new_name_cur					; new_name_cur++
-00009c ef0f                      	ldi		w, null
-00009d 2e60                      	mov		last_key_pressed, w				; last_key_pressed = null
-00009e 2477                      	clr		times_key_pressed				; times_key_pressed = 0
-00009f 2488                      	clr		is_timer_active
+0000a7 e0f2                      	ldi		zh, high(is_keypad_timeout)
+0000a8 e0e9                      	ldi		zl, low(is_keypad_timeout)
+0000a9 8100                      	ld		w, z
+0000aa 1505                      	cp		w, zero
+0000ab f031                      	breq	no_timeout
+0000ac 8250                      	st		z, zero
+0000ad 9433                      	inc		new_name_cur					; new_name_cur++
+0000ae ef0f                      	ldi		w, null
+0000af 2e60                      	mov		last_key_pressed, w				; last_key_pressed = null
+0000b0 2477                      	clr		times_key_pressed				; times_key_pressed = 0
+0000b1 2488                      	clr		is_timer_active
                                  
                                  
                                  no_timeout:
                                  	;	if entry_mode is false and key_pressed == 'A'
                                  	;		enter entry mode
                                  							
-0000a0 1425                      	cp		entry_mode, zero
-0000a1 f439                      	brne	not_display_mode
-0000a2 e003                      	ldi		w, A
-0000a3 1640                      	cp		key_pressed, w
-0000a4 f421                      	brne	not_display_mode
-0000a5 9423                      	inc		entry_mode
-0000a6 d4a3                      	rcall	LCD_ENTRY_MODE
-0000a7 d3c0                      	rcall	DISPLAY_BOTTOM_LEFT
-0000a8 c085                      	rjmp	end_process_key
+0000b2 1425                      	cp		entry_mode, zero
+0000b3 f439                      	brne	not_display_mode
+0000b4 e003                      	ldi		w, A
+0000b5 1640                      	cp		key_pressed, w
+0000b6 f421                      	brne	not_display_mode
+0000b7 9423                      	inc		entry_mode
+0000b8 d49c                      	rcall	LCD_ENTRY_MODE
+0000b9 d3b9                      	rcall	DISPLAY_BOTTOM_LEFT
+0000ba c085                      	rjmp	end_process_key
                                  
                                  not_display_mode:
                                  	;	else if entry_mode is true
                                  	;		handle keys which are not 'A'
-0000a9 1425                      	cp		entry_mode, zero
-0000aa f0e1                      	breq	to_end_process_key
+0000bb 1425                      	cp		entry_mode, zero
+0000bc f0e1                      	breq	to_end_process_key
                                  	;		if new_name_cur != 0 and key_pressed == 'B'
                                  	;			backspace button is pressed
-0000ab 1435                      	cp		new_name_cur, zero
-0000ac f079                      	breq	not_backspace
-0000ad e007                      	ldi		w, B
-0000ae 1640                      	cp		key_pressed, w
-0000af f461                      	brne	not_backspace
-0000b0 2488                      	clr		is_timer_active					; keypad_timer_stop()
-0000b1 943a                      	dec		new_name_cur					; new_name_cur --
+0000bd 1435                      	cp		new_name_cur, zero
+0000be f079                      	breq	not_backspace
+0000bf e007                      	ldi		w, B
+0000c0 1640                      	cp		key_pressed, w
+0000c1 f461                      	brne	not_backspace
+0000c2 2488                      	clr		is_timer_active					; keypad_timer_stop()
+0000c3 943a                      	dec		new_name_cur					; new_name_cur --
                                  	
-0000b2 e0f2                      	ldi		zh, high(new_name)				; new_name[new_name_cur] = 0
-0000b3 e0e0                      	ldi		zl, low(new_name)
+0000c4 e0f2                      	ldi		zh, high(new_name)				; new_name[new_name_cur] = 0
+0000c5 e0ea                      	ldi		zl, low(new_name)
                                  
-0000b4 0de3                      	add		zl, new_name_cur
-0000b5 1df5                      	adc		zh, zero
+0000c6 0de3                      	add		zl, new_name_cur
+0000c7 1df5                      	adc		zh, zero
                                  
-0000b6 8250                      	st		z, zero
+0000c8 8250                      	st		z, zero
                                  
-0000b7 d54a                      	rcall	BACKSPACE
+0000c9 d543                      	rcall	BACKSPACE
                                  
-0000b8 ef0f                      	ldi		w, null							; last_key_pressed = null
-0000b9 2e60                      	mov		last_key_pressed, w
-0000ba 2477                      	clr		times_key_pressed				; times_key_pressed = 0
-0000bb c072                      	rjmp	end_process_key
+0000ca ef0f                      	ldi		w, null							; last_key_pressed = null
+0000cb 2e60                      	mov		last_key_pressed, w
+0000cc 2477                      	clr		times_key_pressed				; times_key_pressed = 0
+0000cd c072                      	rjmp	end_process_key
                                  
                                  not_backspace:
                                  	;		else if key_pressed == 'C'
                                  	;		clear button is pressed
-0000bc e00b                      	ldi		w, C
-0000bd 1640                      	cp		key_pressed, w
-0000be f449                      	brne	not_clear
-0000bf 2488                      	clr		is_timer_active					; keypad_timer_stop()
-0000c0 2433                      	clr		new_name_cur					; new_name_cur = 0
+0000ce e00b                      	ldi		w, C
+0000cf 1640                      	cp		key_pressed, w
+0000d0 f449                      	brne	not_clear
+0000d1 2488                      	clr		is_timer_active					; keypad_timer_stop()
+0000d2 2433                      	clr		new_name_cur					; new_name_cur = 0
                                  	
-0000c1 d077                      	rcall	initialise_array
-0000c2 d487                      	rcall	LCD_ENTRY_MODE
-0000c3 d3a4                      	rcall	DISPLAY_BOTTOM_LEFT
+0000d3 d077                      	rcall	initialise_array
+0000d4 d480                      	rcall	LCD_ENTRY_MODE
+0000d5 d39d                      	rcall	DISPLAY_BOTTOM_LEFT
                                  
-0000c4 ef0f                      	ldi		w, null							; last_key_pressed = null
-0000c5 2e60                      	mov		last_key_pressed, w
-0000c6 2477                      	clr		times_key_pressed				; times_key_pressed = 0
+0000d6 ef0f                      	ldi		w, null							; last_key_pressed = null
+0000d7 2e60                      	mov		last_key_pressed, w
+0000d8 2477                      	clr		times_key_pressed				; times_key_pressed = 0
                                  to_end_process_key:
-0000c7 c066                      	rjmp	end_process_key
+0000d9 c066                      	rjmp	end_process_key
                                  
                                  not_clear:
                                  	;		else if key_pressed == 'D'
                                  	;			enter button is pressed
-0000c8 e00f                      	ldi		w, D
-0000c9 1640                      	cp		key_pressed, w
-0000ca f519                      	brne	not_enter
+0000da e00f                      	ldi		w, D
+0000db 1640                      	cp		key_pressed, w
+0000dc f519                      	brne	not_enter
                                  
-0000cb d0f2                      	rcall	enqueue
-0000cc d349                      	rcall	LCD_DISPLAY_MODE
+0000dd d0f2                      	rcall	enqueue
+0000de d342                      	rcall	LCD_DISPLAY_MODE
                                  
                                  	; if its the first patient then push to display and enable pb0
-0000cd e0f2                      	ldi		zh, high(num_patients)
-0000ce e0e8                      	ldi		zl, low(num_patients)
-0000cf 8100                      	ld		w, z
-0000d0 3001                      	cpi		w, 1
-0000d1 f469                      	brne	not_first_patient
+0000df e0f2                      	ldi		zh, high(num_patients)
+0000e0 e1e2                      	ldi		zl, low(num_patients)
+0000e1 8100                      	ld		w, z
+0000e2 3001                      	cpi		w, 1
+0000e3 f469                      	brne	not_first_patient
                                  
                                  	; enable pb0 and reset pb0 state
-0000d2 e0f2                      	ldi		zh, high(pb0_state)
-0000d3 e1e1                      	ldi		zl, low(pb0_state)
-0000d4 e000                      	ldi		w, 0
-0000d5 8300                      	st		z, w
+0000e4 e0f2                      	ldi		zh, high(pb0_state)
+0000e5 e0e0                      	ldi		zl, low(pb0_state)
+0000e6 e000                      	ldi		w, 0
+0000e7 8300                      	st		z, w
                                  
-0000d6 9100 0069                 	lds		w, EICRA
-0000d8 7f0c                      	andi	w, 0b11111100
-0000d9 6002                      	ori		w, (0b10 << ISC00)
-0000da 9300 0069                 	sts		EICRA, w
+0000e8 9100 0069                 	lds		w, EICRA
+0000ea 7f0c                      	andi	w, 0b11111100
+0000eb 6002                      	ori		w, (0b10 << ISC00)
+0000ec 9300 0069                 	sts		EICRA, w
                                  
-0000dc b30d                      	in		w, EIMSK
-0000dd 6001                      	ori		w, (1 << INT0)
-0000de bb0d                      	out		EIMSK, w
+0000ee b30d                      	in		w, EIMSK
+0000ef 6001                      	ori		w, (1 << INT0)
+0000f0 bb0d                      	out		EIMSK, w
                                  
                                  not_first_patient:
-0000df d5f5                      	rcall	display_front_patient
+0000f1 d671                      	rcall	display_front_patient
                                  
-0000e0 2488                      	clr		is_timer_active					; keypad_timer_stop()
-0000e1 e002                      	ldi		w, high(new_name)				; initialise_array(new_name, 8)
-0000e2 2ea0                      	mov		arg0, w
+0000f2 2488                      	clr		is_timer_active					; keypad_timer_stop()
+0000f3 e002                      	ldi		w, high(new_name)				; initialise_array(new_name, 8)
+0000f4 2ea0                      	mov		arg0, w
                                  
-0000e3 e000                      	ldi		w, low(new_name)
-0000e4 2eb0                      	mov		arg1, w
+0000f5 e00a                      	ldi		w, low(new_name)
+0000f6 2eb0                      	mov		arg1, w
                                  
-0000e5 e008                      	ldi		w, max_name
-0000e6 2ec0                      	mov		arg2, w
+0000f7 e008                      	ldi		w, max_name
+0000f8 2ec0                      	mov		arg2, w
                                  
-0000e7 d051                      	rcall	initialise_array
+0000f9 d051                      	rcall	initialise_array
                                  
-0000e8 2433                      	clr		new_name_cur					; new_name_cur = 0
-0000e9 ef0f                      	ldi		w, null							; last_key_pressed = null
-0000ea 2e60                      	mov		last_key_pressed, w
-0000eb 2477                      	clr		times_key_pressed				; times_key_pressed = 0
-0000ec 2422                      	clr		entry_mode						; entry_mode = false
-0000ed c040                      	rjmp	end_process_key
+0000fa 2433                      	clr		new_name_cur					; new_name_cur = 0
+0000fb ef0f                      	ldi		w, null							; last_key_pressed = null
+0000fc 2e60                      	mov		last_key_pressed, w
+0000fd 2477                      	clr		times_key_pressed				; times_key_pressed = 0
+0000fe 2422                      	clr		entry_mode						; entry_mode = false
+0000ff c040                      	rjmp	end_process_key
                                  
                                  not_enter:
                                  	;		else if key_pressed == 'A'
                                  	;			do nothing
-0000ee e003                      	ldi		w, A
-0000ef 1640                      	cp		key_pressed, w
-0000f0 f409                      	brne	not_nothing1
-0000f1 c03c                      	rjmp	end_process_key
+000100 e003                      	ldi		w, A
+000101 1640                      	cp		key_pressed, w
+000102 f409                      	brne	not_nothing1
+000103 c03c                      	rjmp	end_process_key
                                  
                                  not_nothing1:
                                  	;		else if key_pressed is on the bottom row
                                  	;			do nothing
-0000f2 e00b                      	ldi		w, C
-0000f3 9503                      	inc		w
-0000f4 1640                      	cp		key_pressed, w
-0000f5 f008                      	brlo	not_nothing2
-0000f6 c037                      	rjmp	end_process_key
+000104 e00b                      	ldi		w, C
+000105 9503                      	inc		w
+000106 1640                      	cp		key_pressed, w
+000107 f008                      	brlo	not_nothing2
+000108 c037                      	rjmp	end_process_key
                                  
                                  not_nothing2:
                                  	;		else if key_pressed == '1'
                                  	;			do nothing
-0000f7 1445                      	cp		key_pressed, zero
-0000f8 f409                      	brne	not_nothing3
-0000f9 c034                      	rjmp	end_process_key
+000109 1445                      	cp		key_pressed, zero
+00010a f409                      	brne	not_nothing3
+00010b c034                      	rjmp	end_process_key
                                  
                                  not_nothing3:
                                  	;		else if new_name_cur < 8
-0000fa e008                      	ldi		w, max_name
-0000fb 1630                      	cp		new_name_cur, w
-0000fc f650                      	brsh	to_end_process_key
-0000fd 2488                      	clr		is_timer_active					; keypad_timer_restart()
-0000fe 9483                      	inc		is_timer_active
-0000ff 9250 0095                 	sts		TCNT3h, zero
-000101 9250 0094                 	sts		TCNT3l, zero
+00010c e008                      	ldi		w, max_name
+00010d 1630                      	cp		new_name_cur, w
+00010e f650                      	brsh	to_end_process_key
+00010f 2488                      	clr		is_timer_active					; keypad_timer_restart()
+000110 9483                      	inc		is_timer_active
+000111 9250 0095                 	sts		TCNT3h, zero
+000113 9250 0094                 	sts		TCNT3l, zero
                                  	;			if times_key_pressed == 0
                                  	;				first input key pressed
-000103 1475                      	cp		times_key_pressed, zero
-000104 f419                      	brne	not_first_key
-000105 2c64                      	mov		last_key_pressed, key_pressed	; last_key_presed = key_pressed
-000106 9473                      	inc		times_key_pressed				; times_key_pressed = 1
-000107 c026                      	rjmp	end_process_key
+000115 1475                      	cp		times_key_pressed, zero
+000116 f419                      	brne	not_first_key
+000117 2c64                      	mov		last_key_pressed, key_pressed	; last_key_presed = key_pressed
+000118 9473                      	inc		times_key_pressed				; times_key_pressed = 1
+000119 c026                      	rjmp	end_process_key
                                  
                                  not_first_key:
                                  	;			else if last_key_pressed == key_pressed
                                  	;				cycle between letters on the same key
-000108 1464                      	cp		last_key_pressed, key_pressed
-000109 f499                      	brne	not_same_key
-00010a 9473                      	inc		times_key_pressed
+00011a 1464                      	cp		last_key_pressed, key_pressed
+00011b f499                      	brne	not_same_key
+00011c 9473                      	inc		times_key_pressed
                                  	;				if key_pressed == '9' and times_key_pressed == 5
                                  	;					wrap the number of times key is pressed
-00010b e00a                      	ldi		w, nine
-00010c 1640                      	cp		key_pressed, w
-00010d f431                      	brne	not_nine_wrap
-00010e e005                      	ldi		w, 5
-00010f 1670                      	cp		times_key_pressed, w
-000110 f419                      	brne	not_nine_wrap
-000111 2477                      	clr		times_key_pressed				; times_key_pressed = 1
-000112 9473                      	inc		times_key_pressed
-000113 c008                      	rjmp	end_key_wrap
+00011d e00a                      	ldi		w, nine
+00011e 1640                      	cp		key_pressed, w
+00011f f431                      	brne	not_nine_wrap
+000120 e005                      	ldi		w, 5
+000121 1670                      	cp		times_key_pressed, w
+000122 f419                      	brne	not_nine_wrap
+000123 2477                      	clr		times_key_pressed				; times_key_pressed = 1
+000124 9473                      	inc		times_key_pressed
+000125 c008                      	rjmp	end_key_wrap
                                  	;				else if key_pressed != '9' and times_key_pressed == 4 
                                  	;					wrap the number of times key is pressed
                                  not_nine_wrap:
-000114 e00a                      	ldi		w, nine
-000115 1640                      	cp		key_pressed, w
-000116 f029                      	breq	end_key_wrap
-000117 e004                      	ldi		w, 4
-000118 1670                      	cp		times_key_pressed, w
-000119 f411                      	brne	end_key_wrap
-00011a 2477                      	clr		times_key_pressed				; times_key_pressed = 1
-00011b 9473                      	inc		times_key_pressed
+000126 e00a                      	ldi		w, nine
+000127 1640                      	cp		key_pressed, w
+000128 f029                      	breq	end_key_wrap
+000129 e004                      	ldi		w, 4
+00012a 1670                      	cp		times_key_pressed, w
+00012b f411                      	brne	end_key_wrap
+00012c 2477                      	clr		times_key_pressed				; times_key_pressed = 1
+00012d 9473                      	inc		times_key_pressed
                                  end_key_wrap:
-00011c c011                      	rjmp	end_process_key
+00012e c011                      	rjmp	end_process_key
                                  
                                  not_same_key:
                                  	;			else
                                  	;				enter letter
-00011d e008                      	ldi		w, max_name
-00011e 1630                      	cp		new_name_cur, w
-00011f f470                      	brsh	end_process_key
+00012f e008                      	ldi		w, max_name
+000130 1630                      	cp		new_name_cur, w
+000131 f470                      	brsh	end_process_key
                                  
-000120 e0f2                      	ldi		zh, high(new_name)				; new_name[new_name_cur] = keypad_to_ascii(last_key_pressed, times_key_pressed)
-000121 e0e0                      	ldi		zl, low(new_name)
+000132 e0f2                      	ldi		zh, high(new_name)				; new_name[new_name_cur] = keypad_to_ascii(last_key_pressed, times_key_pressed)
+000133 e0ea                      	ldi		zl, low(new_name)
                                  
-000122 0de3                      	add		zl, new_name_cur
-000123 1df5                      	adc		zh, zero
+000134 0de3                      	add		zl, new_name_cur
+000135 1df5                      	adc		zh, zero
                                  
-000124 2ca6                      	mov		arg0, last_key_pressed
-000125 2cb7                      	mov		arg1, times_key_pressed
-000126 d021                      	rcall	keypad_to_ascii
+000136 2ca6                      	mov		arg0, last_key_pressed
+000137 2cb7                      	mov		arg1, times_key_pressed
+000138 d021                      	rcall	keypad_to_ascii
                                  
-000127 8380                      	st		z, r24
+000139 8380                      	st		z, r24
                                  
-000128 2f38                      	mov		r19, r24
-000129 d535                      	rcall	WRITE
+00013a 2f38                      	mov		r19, r24
+00013b d52e                      	rcall	WRITE
                                  
-00012a 9433                      	inc		new_name_cur					; new_name_cur ++
-00012b 2c64                      	mov		last_key_pressed, key_pressed	; last_key_pressed = key_pressed
-00012c 2477                      	clr		times_key_pressed				; times_key_pressed = 1
-00012d 9473                      	inc		times_key_pressed
+00013c 9433                      	inc		new_name_cur					; new_name_cur ++
+00013d 2c64                      	mov		last_key_pressed, key_pressed	; last_key_pressed = key_pressed
+00013e 2477                      	clr		times_key_pressed				; times_key_pressed = 1
+00013f 9473                      	inc		times_key_pressed
                                  end_process_key:
                                  
-00012e 1485                      	cp		is_timer_active, zero
-00012f f031                      	breq	timer_not_active
-000130 e004                      	ldi		w, 0b00000100
-000131 9300 0091                 	sts		TCCR3B, w
-000133 e001                      	ldi		w, (1 << TOIE3)
-000134 9300 0071                 	sts		TIMSK3, w
+000140 1485                      	cp		is_timer_active, zero
+000141 f031                      	breq	timer_not_active
+000142 e004                      	ldi		w, 0b00000100
+000143 9300 0091                 	sts		TCCR3B, w
+000145 e001                      	ldi		w, (1 << TOIE3)
+000146 9300 0071                 	sts		TIMSK3, w
                                  timer_not_active:
                                  
-000136 b30d                      	in		w, EIMSK
-000137 b905                      	out		PORTB, w
+000148 b30d                      	in		w, EIMSK
+000149 b905                      	out		PORTB, w
                                  
-000138 cf56                      	rjmp	loop
+00014a cf56                      	rjmp	loop
                                  
                                  ;______________________________________________________________________
                                  ; HELPER FUNCTIONS
@@ -2485,20 +2521,20 @@ C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm
                                  ; length - arg2 (r12)
                                  ;______________________________________________________________________
                                  initialise_array:
-000139 93ef                      	push	zl
-00013a 93ff                      	push	zh
-00013b 931f                      	push	r17
+00014b 93ef                      	push	zl
+00014c 93ff                      	push	zh
+00014d 931f                      	push	r17
                                  
-00013c 2dfa                      	mov		zh, arg0
-00013d 2deb                      	mov		zl, arg1
+00014e 2dfa                      	mov		zh, arg0
+00014f 2deb                      	mov		zl, arg1
                                  
-00013e 2d1c                      	mov		r17, arg2
+000150 2d1c                      	mov		r17, arg2
                                  
                                  	;rcall	INITIALISE_LCD
                                  
                                  initialise_array_loop:
-00013f 1515                      	cp		r17, zero
-000140 f019                      	breq	end_initialise_array_loop
+000151 1515                      	cp		r17, zero
+000152 f019                      	breq	end_initialise_array_loop
                                  
                                  	;ld		r27, z
                                  	;cp		r27, zero
@@ -2506,16 +2542,16 @@ C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm
                                  	;lcd_write_data
                                  	;lcd_wait_busy
                                  ;dont_write:
-000141 9251                      	st		z+, zero
+000153 9251                      	st		z+, zero
                                  
-000142 951a                      	dec		r17
-000143 cffb                      	rjmp	initialise_array_loop
+000154 951a                      	dec		r17
+000155 cffb                      	rjmp	initialise_array_loop
                                  end_initialise_array_loop:
                                  
-000144 911f                      	pop		r17
-000145 91ff                      	pop		zh
-000146 91ef                      	pop		zl
-000147 9508                      	ret
+000156 911f                      	pop		r17
+000157 91ff                      	pop		zh
+000158 91ef                      	pop		zl
+000159 9508                      	ret
                                  
                                  ;______________________________________________________________________
                                  ; keypad_to_ascii
@@ -2524,44 +2560,44 @@ C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm
                                  ; times_key_pressed - arg1 (r11)
                                  ;______________________________________________________________________
                                  keypad_to_ascii:
-000148 93ef                      	push	zl
-000149 93ff                      	push	zh
-00014a 930f                      	push	w
-00014b 931f                      	push	r17
+00015a 93ef                      	push	zl
+00015b 93ff                      	push	zh
+00015c 930f                      	push	w
+00015d 931f                      	push	r17
                                  
                                  	; get keypad number value from lookup table
-00014c e0fd                      	ldi		zh, high(value_lookup << 1)
-00014d eeee                      	ldi		zl, low(value_lookup << 1)
+00015e e0ff                      	ldi		zh, high(value_lookup << 1)
+00015f e0ea                      	ldi		zl, low(value_lookup << 1)
                                  
-00014e 0dea                      	add		zl, arg0
-00014f 1df5                      	adc		zh, zero
+000160 0dea                      	add		zl, arg0
+000161 1df5                      	adc		zh, zero
                                  
                                  	; do maths
-000150 9104                      	lpm		w, z
-000151 950a                      	dec		w
-000152 950a                      	dec		w
-000153 94ba                      	dec		arg1
+000162 9104                      	lpm		w, z
+000163 950a                      	dec		w
+000164 950a                      	dec		w
+000165 94ba                      	dec		arg1
                                  
-000154 2f10                      	mov		r17, w
-000155 0f11                      	lsl		r17
-000156 0f01                      	add		w, r17
-000157 0d0b                      	add		w, arg1
+000166 2f10                      	mov		r17, w
+000167 0f11                      	lsl		r17
+000168 0f01                      	add		w, r17
+000169 0d0b                      	add		w, arg1
                                  
                                  	; get ascii value of input character from lookup table
-000158 e0fd                      	ldi		zh, high(ascii_lookup << 1)
-000159 efee                      	ldi		zl, low(ascii_lookup << 1)
+00016a e0ff                      	ldi		zh, high(ascii_lookup << 1)
+00016b e1ea                      	ldi		zl, low(ascii_lookup << 1)
                                  
-00015a 0fe0                      	add		zl, w
-00015b 1df5                      	adc		zh, zero
+00016c 0fe0                      	add		zl, w
+00016d 1df5                      	adc		zh, zero
                                  
-00015c 9104                      	lpm		w, z
-00015d 2f80                      	mov		r24, w
+00016e 9104                      	lpm		w, z
+00016f 2f80                      	mov		r24, w
                                  
-00015e 911f                      	pop		r17
-00015f 910f                      	pop		w
-000160 91ff                      	pop		zh
-000161 91ef                      	pop		zl
-000162 9508                      	ret
+000170 911f                      	pop		r17
+000171 910f                      	pop		w
+000172 91ff                      	pop		zh
+000173 91ef                      	pop		zl
+000174 9508                      	ret
                                  
                                  ;______________________________________________________________________
                                  ; keypad_to_ascii
@@ -2570,122 +2606,122 @@ C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm
                                  ; times_key_pressed - arg1 (r11)
                                  ;______________________________________________________________________
                                  scan_keypad:
-000163 930f                      	push	w
-000164 922f                      	push	r2
-000165 923f                      	push	r3
-000166 924f                      	push	r4
-000167 925f                      	push	r5
-000168 931f                      	push	r17
-000169 932f                      	push	r18
+000175 930f                      	push	w
+000176 922f                      	push	r2
+000177 923f                      	push	r3
+000178 924f                      	push	r4
+000179 925f                      	push	r5
+00017a 931f                      	push	r17
+00017b 932f                      	push	r18
                                  
-00016a 93ef                      	push	zl
-00016b 93ff                      	push	zh
+00017c 93ef                      	push	zl
+00017d 93ff                      	push	zh
                                  
-00016c e004                      	ldi		w, KEYPADSIZE				; initialise keypad size
-00016d 2e40                      	mov		r4, w
-00016e 2422                      	clr		r2							; clear column
-00016f e72f                      	ldi		r18, INITCOLMASK			; initialise column mask
+00017e e004                      	ldi		w, KEYPADSIZE				; initialise keypad size
+00017f 2e40                      	mov		r4, w
+000180 2422                      	clr		r2							; clear column
+000181 e72f                      	ldi		r18, INITCOLMASK			; initialise column mask
                                  
                                  col_loop:
-000170 1424                      	cp		r2, r4						; if maximum columns reached
-000171 f014                      	brlt	push_mask
-000172 e72f                      	ldi		r18, INITCOLMASK			; reset the column mask
-000173 2422                      	clr		r2							; reset column count
+000182 1424                      	cp		r2, r4						; if maximum columns reached
+000183 f014                      	brlt	push_mask
+000184 e72f                      	ldi		r18, INITCOLMASK			; reset the column mask
+000185 2422                      	clr		r2							; reset column count
                                  push_mask:
-000174 b928                      	out		PORTC, r18
-000175 ef0f                      	ldi		w, 0b11111111				; delay to allow pin to update
+000186 b928                      	out		PORTC, r18
+000187 ef0f                      	ldi		w, 0b11111111				; delay to allow pin to update
                                  update_delay:
-000176 950a                      	dec		w
-000177 f7f1                      	brne	update_delay
+000188 950a                      	dec		w
+000189 f7f1                      	brne	update_delay
                                  
-000178 b106                      	in		w, PINC						; read portc
-000179 700f                      	andi	w, CHECKROWMASK				; read only the inputs
-00017a 300f                      	cpi		w, CHECKROWMASK
-00017b f099                      	breq	nextcol						; check if any of the buttons are pressed
+00018a b106                      	in		w, PINC						; read portc
+00018b 700f                      	andi	w, CHECKROWMASK				; read only the inputs
+00018c 300f                      	cpi		w, CHECKROWMASK
+00018d f099                      	breq	nextcol						; check if any of the buttons are pressed
                                  
-00017c 2e50                      	mov		r5, w						; save copy of inputs
-00017d 2433                      	clr		r3							; initialise row scan
-00017e e018                      	ldi		r17, INITROWMASK
+00018e 2e50                      	mov		r5, w						; save copy of inputs
+00018f 2433                      	clr		r3							; initialise row scan
+000190 e018                      	ldi		r17, INITROWMASK
                                  row_loop:
-00017f 2d05                      	mov		w, r5						; get input value
-000180 2301                      	and		w, r17						; mask out single bit
-000181 f449                      	brne	inc_row						; if button pressed
-000182 efef
-000183 efff
-000184 0000
-000185 50e1
-000186 40f0
-000187 f7e1                      	debounce							; debounce button
-000188 b106                      	in		w, PINC						; read port again
-000189 2301                      	and		w, r17						; check value of pin again
-00018a f041                      	breq	resolve						; if button still pressed resolve value
+000191 2d05                      	mov		w, r5						; get input value
+000192 2301                      	and		w, r17						; mask out single bit
+000193 f449                      	brne	inc_row						; if button pressed
+000194 efef
+000195 efff
+000196 0000
+000197 50e1
+000198 40f0
+000199 f7e1                      	debounce							; debounce button
+00019a b106                      	in		w, PINC						; read port again
+00019b 2301                      	and		w, r17						; check value of pin again
+00019c f041                      	breq	resolve						; if button still pressed resolve value
                                  inc_row:
-00018b 9516                      	lsr		r17							; shift row mask
-00018c 9433                      	inc		r3							; increment row count
-00018d 1434                      	cp		r3, r4
-00018e f781                      	brne	row_loop
+00019d 9516                      	lsr		r17							; shift row mask
+00019e 9433                      	inc		r3							; increment row count
+00019f 1434                      	cp		r3, r4
+0001a0 f781                      	brne	row_loop
                                  nextcol:
-00018f 9526                      	lsr		r18							; shift column mask right
-000190 6820                      	sbr		r18, 0b10000000				; re-set left most bit
-000191 9423                      	inc		r2							; increment column count
-000192 cfdd                      	rjmp	col_loop
+0001a1 9526                      	lsr		r18							; shift column mask right
+0001a2 6820                      	sbr		r18, 0b10000000				; re-set left most bit
+0001a3 9423                      	inc		r2							; increment column count
+0001a4 cfdd                      	rjmp	col_loop
                                  
                                  resolve:
-000193 0c33                      	lsl		r3							; get key index by adding row * 4 + column
-000194 0c33                      	lsl		r3
-000195 2d03                      	mov		w, r3
-000196 0d02                      	add		w, r2
+0001a5 0c33                      	lsl		r3							; get key index by adding row * 4 + column
+0001a6 0c33                      	lsl		r3
+0001a7 2d03                      	mov		w, r3
+0001a8 0d02                      	add		w, r2
                                  
-000197 2f80                      	mov		r24, w
+0001a9 2f80                      	mov		r24, w
                                  
                                  hold_loop:								; wait until button is unpressed before continuing to read keypad
-000198 b106                      	in		w, PINC						; read port again
-000199 2301                      	and		w, r17						; check value of pin again
-00019a f3e9                      	breq	hold_loop					; if button still pressed don't allow key to be continually read
+0001aa b106                      	in		w, PINC						; read port again
+0001ab 2301                      	and		w, r17						; check value of pin again
+0001ac f3e9                      	breq	hold_loop					; if button still pressed don't allow key to be continually read
                                  
-00019b 91ff                      	pop		zh
-00019c 91ef                      	pop		zl
+0001ad 91ff                      	pop		zh
+0001ae 91ef                      	pop		zl
                                  
-00019d 912f                      	pop		r18
-00019e 911f                      	pop		r17
-00019f 905f                      	pop		r5
-0001a0 904f                      	pop		r4
-0001a1 903f                      	pop		r3
-0001a2 902f                      	pop		r2
-0001a3 910f                      	pop		w
-0001a4 9508                      	ret
+0001af 912f                      	pop		r18
+0001b0 911f                      	pop		r17
+0001b1 905f                      	pop		r5
+0001b2 904f                      	pop		r4
+0001b3 903f                      	pop		r3
+0001b4 902f                      	pop		r2
+0001b5 910f                      	pop		w
+0001b6 9508                      	ret
                                  
                                  ; Clears new_name variable in memory
                                  clear_name:
-0001a5 93cf                      	push YL
-0001a6 93df                      	push YH
-0001a7 930f                      	push r16
-0001a8 931f                      	push r17
-0001a9 e0d2                      	ldi  YH, high(new_name)
-0001aa e0c0                      	ldi  YL, low(new_name)
-0001ab e008                      	ldi  r16, 8
-0001ac e010                      	ldi  r17, 0
+0001b7 93cf                      	push YL
+0001b8 93df                      	push YH
+0001b9 930f                      	push r16
+0001ba 931f                      	push r17
+0001bb e0d2                      	ldi  YH, high(new_name)
+0001bc e0ca                      	ldi  YL, low(new_name)
+0001bd e008                      	ldi  r16, 8
+0001be e010                      	ldi  r17, 0
                                  delete:
-0001ad 9319                      	st   Y+, r17
-0001ae 950a                      	dec  r16
-0001af 3000                      	cpi  r16, 0
-0001b0 f7e1                      	brne delete
-0001b1 911f                      	pop  r17
-0001b2 910f                      	pop  r16
-0001b3 91ff                      	pop  ZH
-0001b4 91ef                      	pop  ZL
-0001b5 9508                      	ret
+0001bf 9319                      	st   Y+, r17
+0001c0 950a                      	dec  r16
+0001c1 3000                      	cpi  r16, 0
+0001c2 f7e1                      	brne delete
+0001c3 911f                      	pop  r17
+0001c4 910f                      	pop  r16
+0001c5 91ff                      	pop  ZH
+0001c6 91ef                      	pop  ZL
+0001c7 9508                      	ret
                                  
                                  ; Returns length of queue in r25:r24
                                  get_queue_len:
-0001b6 93cf                      	push YL
-0001b7 93df                      	push YH
-0001b8 e0d2                      	ldi  YH, high(num_patients)
-0001b9 e0c8                      	ldi  YL, low(num_patients)
-0001ba 9189                      	ld   r24, Y+
-0001bb 8198                      	ld   r25, Y                 ; Stores queue length (num_patients) in r25:r24
-0001bc 91df                      	pop  YH
-0001bd 91cf                      	pop  YL
+0001c8 93cf                      	push YL
+0001c9 93df                      	push YH
+0001ca e0d2                      	ldi  YH, high(num_patients)
+0001cb e1c2                      	ldi  YL, low(num_patients)
+0001cc 9189                      	ld   r24, Y+
+0001cd 8198                      	ld   r25, Y                 ; Stores queue length (num_patients) in r25:r24
+0001ce 91df                      	pop  YH
+0001cf 91cf                      	pop  YL
                                  
                                  ; Enqueues new patient
                                  ; Assigns pid and returns pointer to location of
@@ -2693,112 +2729,112 @@ C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm
                                  ; Should ideally be done with interrupts disabled
                                  ; to avoid race conditions.
                                  enqueue:
-0001be 93cf                      	push YL
-0001bf 93df                      	push YH
-0001c0 93ef                      	push ZL
-0001c1 93ff                      	push ZH
-0001c2 93af                      	push r26
-0001c3 93bf                      	push r27
-0001c4 e0d2                      	ldi  YH, high(last_patient)
-0001c5 e0ce                      	ldi  YL, low(last_patient)
-0001c6 91a9                      	ld   r26, Y+
-0001c7 81b8                      	ld   r27, Y
-0001c8 01fd                      	movw Z, r26                    ; Store pointer to previous end of Q
-0001c9 961a                      	adiw r26, P_SIZE
-0001ca 83b8                      	st   Y, r27
-0001cb 93aa                      	st   -Y, r26                   ; Update pointer to last patient in queue
-0001cc 01ed                      	movw Y, r26                    ; Move Y pointer to new_patient
-0001cd 01cd                      	movw r24, r26				   ; Move address of new_patient to return registers
-0001ce 91a1                      	ld   r26, Z+
-0001cf 81b0                      	ld   r27, Z                    ; Load most recent pid
-0001d0 9611                      	adiw r26, 1					   ; Increment
-0001d1 93a9                      	st   Y+, r26
-0001d2 93b9                      	st   Y+, r27			       ; Assign new pid to next patient
-0001d3 e0f2
-0001d4 e0e0
-0001d5 e0a8
-0001d6 91b1
-0001d7 93b9
-0001d8 95aa
-0001d9 30a0
-0001da f7d9                      	read_name					   ; Reads in patient name from data memory
-0001db dfc9                      	rcall clear_name
-0001dc e0d2                      	ldi  YH, high(num_patients)
-0001dd e0c8                      	ldi  YL, low(num_patients)  
-0001de 91a9                      	ld   r26, Y+
-0001df 81b8                      	ld   r27, Y
-0001e0 9611                      	adiw r26, 1                 
-0001e1 83b8                      	st   Y, r27
-0001e2 93aa                      	st   -Y, r26				   ; Update num_patients last                     
-0001e3 91bf                      	pop  r27
-0001e4 91af                      	pop  r26
-0001e5 91ff                      	pop  ZH
-0001e6 91ef                      	pop  ZL
-0001e7 91df                      	pop  YH
-0001e8 91cf                      	pop  YL
-0001e9 9508                      	ret
+0001d0 93cf                      	push YL
+0001d1 93df                      	push YH
+0001d2 93ef                      	push ZL
+0001d3 93ff                      	push ZH
+0001d4 93af                      	push r26
+0001d5 93bf                      	push r27
+0001d6 e0d2                      	ldi  YH, high(last_patient)
+0001d7 e1c8                      	ldi  YL, low(last_patient)
+0001d8 91a9                      	ld   r26, Y+
+0001d9 81b8                      	ld   r27, Y
+0001da 01fd                      	movw Z, r26                    ; Store pointer to previous end of Q
+0001db 961a                      	adiw r26, P_SIZE
+0001dc 83b8                      	st   Y, r27
+0001dd 93aa                      	st   -Y, r26                   ; Update pointer to last patient in queue
+0001de 01ed                      	movw Y, r26                    ; Move Y pointer to new_patient
+0001df 01cd                      	movw r24, r26				   ; Move address of new_patient to return registers
+0001e0 91a1                      	ld   r26, Z+
+0001e1 81b0                      	ld   r27, Z                    ; Load most recent pid
+0001e2 9611                      	adiw r26, 1					   ; Increment
+0001e3 93a9                      	st   Y+, r26
+0001e4 93b9                      	st   Y+, r27			       ; Assign new pid to next patient
+0001e5 e0f2
+0001e6 e0ea
+0001e7 e0a8
+0001e8 91b1
+0001e9 93b9
+0001ea 95aa
+0001eb 30a0
+0001ec f7d9                      	read_name					   ; Reads in patient name from data memory
+0001ed dfc9                      	rcall clear_name
+0001ee e0d2                      	ldi  YH, high(num_patients)
+0001ef e1c2                      	ldi  YL, low(num_patients)  
+0001f0 91a9                      	ld   r26, Y+
+0001f1 81b8                      	ld   r27, Y
+0001f2 9611                      	adiw r26, 1                 
+0001f3 83b8                      	st   Y, r27
+0001f4 93aa                      	st   -Y, r26				   ; Update num_patients last                     
+0001f5 91bf                      	pop  r27
+0001f6 91af                      	pop  r26
+0001f7 91ff                      	pop  ZH
+0001f8 91ef                      	pop  ZL
+0001f9 91df                      	pop  YH
+0001fa 91cf                      	pop  YL
+0001fb 9508                      	ret
                                  
                                  ; Dequeues first patient from queue and discards
                                  ; Does not return any values.
                                  ; Should ideally be done with interrupts disabled
                                  ; to avoid race conditions.	
                                  dequeue:
-0001ea 93df                      	push YH
-0001eb 93cf                      	push YL
-0001ec 939f                      	push r25
-0001ed 938f                      	push r24
-0001ee 93bf                      	push r27
-0001ef 93af                      	push r26
-0001f0 e0d2                      	ldi  YH, high(num_patients)
-0001f1 e0c8                      	ldi  YL, low(num_patients)      
-0001f2 91a9                      	ld   r26, Y+
-0001f3 81b8                      	ld   r27, Y
-0001f4 9711                      	sbiw r26, 1
-0001f5 83b8                      	st   Y, r27
-0001f6 93aa                      	st  -Y, r26                     ; Update num_patients first
-0001f7 e0d2                      	ldi  YH, high(first_patient)    
-0001f8 e0cc                      	ldi  YL, low(first_patient)
-0001f9 9189                      	ld   r24, Y+					
-0001fa 8198                      	ld   r25, Y						; Store address of dequeued patient to be cleared
-0001fb 30a0                      	cpi  r26, 0
-0001fc f469                      	brne not_empty
-0001fd 30b0                      	cpi  r27, 0
-0001fe f459                      	brne not_empty                  ; If queue not empty, proceed
-0001ff e0d2                      	ldi  YH, high(first_patient)    
-000200 e0cc                      	ldi  YL, low(first_patient)
-000201 01de                      	movw r26, Y                     ; Else reset queue variables
-000202 9618                      	adiw r26, 8
-000203 93a9                      	st   Y+, r26
-000204 93b9                      	st   Y+, r27
-000205 e0b2                      	ldi  r27, high(init_pid)
-000206 e0aa                      	ldi  r26, low(init_pid)
-000207 93a9                      	st   Y+, r26
-000208 83b8                      	st   Y, r27
-000209 c007                      	rjmp clear_patient
+0001fc 93df                      	push YH
+0001fd 93cf                      	push YL
+0001fe 939f                      	push r25
+0001ff 938f                      	push r24
+000200 93bf                      	push r27
+000201 93af                      	push r26
+000202 e0d2                      	ldi  YH, high(num_patients)
+000203 e1c2                      	ldi  YL, low(num_patients)      
+000204 91a9                      	ld   r26, Y+
+000205 81b8                      	ld   r27, Y
+000206 9711                      	sbiw r26, 1
+000207 83b8                      	st   Y, r27
+000208 93aa                      	st  -Y, r26                     ; Update num_patients first
+000209 e0d2                      	ldi  YH, high(first_patient)    
+00020a e1c6                      	ldi  YL, low(first_patient)
+00020b 9189                      	ld   r24, Y+					
+00020c 8198                      	ld   r25, Y						; Store address of dequeued patient to be cleared
+00020d 30a0                      	cpi  r26, 0
+00020e f469                      	brne not_empty
+00020f 30b0                      	cpi  r27, 0
+000210 f459                      	brne not_empty                  ; If queue not empty, proceed
+000211 e0d2                      	ldi  YH, high(first_patient)    
+000212 e1c6                      	ldi  YL, low(first_patient)
+000213 01de                      	movw r26, Y                     ; Else reset queue variables
+000214 9618                      	adiw r26, 8
+000215 93a9                      	st   Y+, r26
+000216 93b9                      	st   Y+, r27
+000217 e0b2                      	ldi  r27, high(init_pid)
+000218 e1a4                      	ldi  r26, low(init_pid)
+000219 93a9                      	st   Y+, r26
+00021a 83b8                      	st   Y, r27
+00021b c007                      	rjmp clear_patient
                                  not_empty:
-00020a e0d2                      	ldi  YH, high(first_patient)    ; Increment first_patient pointer
-00020b e0cc                      	ldi  YL, low(first_patient)
-00020c 91a9                      	ld   r26, Y+
-00020d 81b8                      	ld   r27, Y
-00020e 961a                      	adiw r26, P_SIZE
-00020f 83b8                      	st   Y, r27
-000210 93aa                      	st   -Y, r26
+00021c e0d2                      	ldi  YH, high(first_patient)    ; Increment first_patient pointer
+00021d e1c6                      	ldi  YL, low(first_patient)
+00021e 91a9                      	ld   r26, Y+
+00021f 81b8                      	ld   r27, Y
+000220 961a                      	adiw r26, P_SIZE
+000221 83b8                      	st   Y, r27
+000222 93aa                      	st   -Y, r26
                                  clear_patient:
-000211 01ec                      	movw Y, r24                     
-000212 e0aa                      	ldi r26, P_SIZE                 ; Then clear patient struct
-000213 e0b0                      	ldi r27, 0
+000223 01ec                      	movw Y, r24                     
+000224 e0aa                      	ldi r26, P_SIZE                 ; Then clear patient struct
+000225 e0b0                      	ldi r27, 0
                                  clear_pt_loop:
-000214 93b9                      	st  Y+, r27
-000215 95aa                      	dec r26
-000216 30a0                      	cpi r26, 0
-000217 f7e1                      	brne clear_pt_loop
-000218 91af                      	pop r26
-000219 91bf                      	pop r27
-00021a 918f                      	pop r24
-00021b 919f                      	pop r25
-00021c 91cf                      	pop YL
-00021d 91df                      	pop YH
-00021e 9508                      	ret
+000226 93b9                      	st  Y+, r27
+000227 95aa                      	dec r26
+000228 30a0                      	cpi r26, 0
+000229 f7e1                      	brne clear_pt_loop
+00022a 91af                      	pop r26
+00022b 91bf                      	pop r27
+00022c 918f                      	pop r24
+00022d 919f                      	pop r25
+00022e 91cf                      	pop YL
+00022f 91df                      	pop YH
+000230 9508                      	ret
                                  
                                  ;	; push button interrupts TODO change functionality
                                  ;	ldi		w, (0b10 << ISC00)
@@ -2812,1302 +2848,1296 @@ C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm
                                  ;	out		EIMSK, w
                                  
                                  pb0_ih:
-00021f 93ef                      	push	zl
-000220 93ff                      	push	zh
-000221 930f                      	push	w
-000222 931f                      	push	r17
-000223 932f                      	push	r18
-000224 925f                      	push	zero
+000231 93ef                      	push	zl
+000232 93ff                      	push	zh
+000233 930f                      	push	w
+000234 931f                      	push	r17
+000235 932f                      	push	r18
+000236 925f                      	push	zero
                                  
-000225 b71f                      	in		r17, sreg
+000237 b71f                      	in		r17, sreg
                                  
-000226 efef
-000227 efff
-000228 0000
-000229 50e1
-00022a 40f0
-00022b f7e1                      	debounce
+                                 	;debounce
                                  
-00022c 2455                      	clr		zero
+000238 2455                      	clr		zero
                                  
-00022d e0f2                      	ldi		zh, high(pb0_state)
-00022e e1e1                      	ldi		zl, low(pb0_state)
+000239 e0f2                      	ldi		zh, high(pb0_state)
+00023a e0e0                      	ldi		zl, low(pb0_state)
                                  
-00022f 8120                      	ld		r18, z
+00023b 8120                      	ld		r18, z
                                  
                                  
                                  pb0_state0:
-000230 3020                      	cpi		r18, 0
-000231 f4c1                      	brne	pb0_state1
+00023c 3020                      	cpi		r18, 0
+00023d f4d1                      	brne	pb0_state1
                                  
                                  	; call next patient
+00023e d50d                      	rcall init_beeps
+00023f d4e2                      	rcall beep_beep
                                  
                                  	; enable push button 1 (cancel appointment)
-000232 e0f2                      	ldi		zh, high(pb1_state)
-000233 e1e2                      	ldi		zl, low(pb1_state)
-000234 8250                      	st		z, zero
+000240 e0f2                      	ldi		zh, high(pb1_state)
+000241 e0e1                      	ldi		zl, low(pb1_state)
+000242 8250                      	st		z, zero
                                  
-000235 9100 0069                 	lds		w, EICRA
-000237 7f03                      	andi	w, 0b11110011
-000238 6008                      	ori		w, (0b10 << ISC10)
-000239 9300 0069                 	sts		EICRA, w
+000243 9100 0069                 	lds		w, EICRA
+000245 7f03                      	andi	w, 0b11110011
+000246 6008                      	ori		w, (0b10 << ISC10)
+000247 9300 0069                 	sts		EICRA, w
                                  
-00023b 9100 0069                 	lds		w, EICRA
-00023d 7f0c                      	andi	w, 0b11111100
-00023e 6002                      	ori		w, (0b10 << ISC00)
+000249 9100 0069                 	lds		w, EICRA
+00024b 7f0c                      	andi	w, 0b11111100
+00024c 6002                      	ori		w, (0b10 << ISC00)
                                  	
-00023f b30d                      	in		w, EIMSK
-000240 6002                      	ori		w, (1 << INT1)
-000241 bb0d                      	out		EIMSK, w
+00024d b30d                      	in		w, EIMSK
+00024e 6002                      	ori		w, (1 << INT1)
+00024f bb0d                      	out		EIMSK, w
                                  
-000242 b30d                      	in		w, EIMSK
-000243 6001                      	ori		w, (1 << INT0)
-000244 bb0d                      	out		EIMSK, w
+000250 b30d                      	in		w, EIMSK
+000251 6001                      	ori		w, (1 << INT0)
+000252 bb0d                      	out		EIMSK, w
                                  
                                  	; change push button state to 1
-000245 e0f2                      	ldi		zh, high(pb0_state)
-000246 e1e1                      	ldi		zl, low(pb0_state)
-000247 e021                      	ldi		r18, 1
-000248 8320                      	st		z, r18
+000253 e0f2                      	ldi		zh, high(pb0_state)
+000254 e0e0                      	ldi		zl, low(pb0_state)
+000255 e021                      	ldi		r18, 1
+000256 8320                      	st		z, r18
                                  
-000249 c026                      	rjmp	pb0_state_end
+000257 c026                      	rjmp	pb0_state_end
                                  pb0_state1:
-00024a 3021                      	cpi		r18, 1
-00024b f4b1                      	brne	pb0_state2
+000258 3021                      	cpi		r18, 1
+000259 f4b1                      	brne	pb0_state2
                                  
                                  	; start timer for 1 second
-00024c 9250 00a5                 	sts		TCNT4h, zero
-00024e 9250 00a4                 	sts		TCNT4l, zero
-000250 e004                      	ldi		w, 0b00000100
-000251 9300 00a1                 	sts		TCCR4B, w
-000253 e001                      	ldi		w, (1 << TOIE4)
-000254 9300 0072                 	sts		TIMSK4, w
+00025a 9250 00a5                 	sts		TCNT4h, zero
+00025c 9250 00a4                 	sts		TCNT4l, zero
+00025e e004                      	ldi		w, 0b00000100
+00025f 9300 00a1                 	sts		TCCR4B, w
+000261 e001                      	ldi		w, (1 << TOIE4)
+000262 9300 0072                 	sts		TIMSK4, w
                                  
                                  	; change push button to release
-000256 9100 0069                 	lds		w, EICRA
-000258 7f0c                      	andi	w, 0b11111100
-000259 6003                      	ori		w, (0b11 << ISC00)
-00025a 9300 0069                 	sts		EICRA, w
+000264 9100 0069                 	lds		w, EICRA
+000266 7f0c                      	andi	w, 0b11111100
+000267 6003                      	ori		w, (0b11 << ISC00)
+000268 9300 0069                 	sts		EICRA, w
                                  	
                                  	; change push button state to 2
-00025c e022                      	ldi		r18, 2
-00025d 8320                      	st		z, r18
+00026a e022                      	ldi		r18, 2
+00026b 8320                      	st		z, r18
                                  
                                  	; set timer functionality
-00025e e0f2                      	ldi		zh, high(which_pb)
-00025f e1e3                      	ldi		zl, low(which_pb)
-000260 8250                      	st		z, zero
+00026c e0f2                      	ldi		zh, high(which_pb)
+00026d e0e2                      	ldi		zl, low(which_pb)
+00026e 8250                      	st		z, zero
                                  
-000261 c00e                      	rjmp	pb0_state_end
+00026f c00e                      	rjmp	pb0_state_end
                                  pb0_state2:
-000262 3022                      	cpi		r18, 2
-000263 f461                      	brne	pb0_state_end
+000270 3022                      	cpi		r18, 2
+000271 f461                      	brne	pb0_state_end
                                  	
                                  	; turn off timer
-000264 9250 00a1                 	sts		TCCR4B, zero
-000266 9250 0072                 	sts		TIMSK4, zero
+000272 9250 00a1                 	sts		TCCR4B, zero
+000274 9250 0072                 	sts		TIMSK4, zero
                                  
                                  	; change push button to push down
-000268 9100 0069                 	lds		w, EICRA
-00026a 7f0c                      	andi	w, 0b11111100
-00026b 6002                      	ori		w, (0b10 << ISC00)
-00026c 9300 0069                 	sts		EICRA, w
+000276 9100 0069                 	lds		w, EICRA
+000278 7f0c                      	andi	w, 0b11111100
+000279 6002                      	ori		w, (0b10 << ISC00)
+00027a 9300 0069                 	sts		EICRA, w
                                  
                                  	; return push button state to 1
-00026e e021                      	ldi		r18, 1
-00026f 8320                      	st		z, r18
+00027c e021                      	ldi		r18, 1
+00027d 8320                      	st		z, r18
                                  pb0_state_end:
                                  
-000270 b925                      	out		PORTB, r18
+00027e b925                      	out		PORTB, r18
                                  
-000271 bf1f                      	out		sreg, r17
+00027f bf1f                      	out		sreg, r17
                                  
-000272 905f                      	pop		zero
-000273 912f                      	pop		r18
-000274 911f                      	pop		r17
-000275 910f                      	pop		w
-000276 91ff                      	pop		zh
-000277 91ef                      	pop		zl
-000278 9518                      	reti
+000280 905f                      	pop		zero
+000281 912f                      	pop		r18
+000282 911f                      	pop		r17
+000283 910f                      	pop		w
+000284 91ff                      	pop		zh
+000285 91ef                      	pop		zl
+000286 9518                      	reti
                                  
                                  pb1_ih:
-000279 93ef                      	push	zl
-00027a 93ff                      	push	zh
-00027b 930f                      	push	w
-00027c 931f                      	push	r17
-00027d 932f                      	push	r18
-00027e 925f                      	push	zero
+000287 93ef                      	push	zl
+000288 93ff                      	push	zh
+000289 930f                      	push	w
+00028a 931f                      	push	r17
+00028b 932f                      	push	r18
+00028c 925f                      	push	zero
                                  
-00027f b71f                      	in		r17, sreg
+00028d b71f                      	in		r17, sreg
                                  
-000280 efef
-000281 efff
-000282 0000
-000283 50e1
-000284 40f0
-000285 f7e1                      	debounce
+                                 	;debounce
                                  
-000286 2455                      	clr		zero
+00028e 2455                      	clr		zero
                                  
-000287 e0f2                      	ldi		zh, high(pb1_state)
-000288 e1e2                      	ldi		zl, low(pb1_state)
+00028f e0f2                      	ldi		zh, high(pb1_state)
+000290 e0e1                      	ldi		zl, low(pb1_state)
                                  
-000289 8120                      	ld		r18, z
+000291 8120                      	ld		r18, z
                                  
                                  pb1_state0:
-00028a 3020                      	cpi		r18, 0
-00028b f4b9                      	brne	pb1_state1
+000292 3020                      	cpi		r18, 0
+000293 f4b9                      	brne	pb1_state1
                                  
                                  	; start timer for 1 second
-00028c 9250 00a5                 	sts		TCNT4h, zero
-00028e 9250 00a4                 	sts		TCNT4l, zero
-000290 e004                      	ldi		w, 0b00000100
-000291 9300 00a1                 	sts		TCCR4B, w
-000293 e001                      	ldi		w, (1 << TOIE4)
-000294 9300 0072                 	sts		TIMSK4, w
+000294 9250 00a5                 	sts		TCNT4h, zero
+000296 9250 00a4                 	sts		TCNT4l, zero
+000298 e004                      	ldi		w, 0b00000100
+000299 9300 00a1                 	sts		TCCR4B, w
+00029b e001                      	ldi		w, (1 << TOIE4)
+00029c 9300 0072                 	sts		TIMSK4, w
                                  
                                  	; change push button to release
-000296 9100 0069                 	lds		w, EICRA
-000298 7f03                      	andi	w, 0b11110011
-000299 600c                      	ori		w, (0b11 << ISC10)
-00029a 9300 0069                 	sts		EICRA, w
+00029e 9100 0069                 	lds		w, EICRA
+0002a0 7f03                      	andi	w, 0b11110011
+0002a1 600c                      	ori		w, (0b11 << ISC10)
+0002a2 9300 0069                 	sts		EICRA, w
                                  	
                                  	; change push button state to 1
-00029c 9523                      	inc		r18
-00029d 8320                      	st		z, r18
+0002a4 9523                      	inc		r18
+0002a5 8320                      	st		z, r18
                                  
                                  	; set timer functionality
-00029e e0f2                      	ldi		zh, high(which_pb)
-00029f e1e3                      	ldi		zl, low(which_pb)
-0002a0 e001                      	ldi		w, 1
-0002a1 8300                      	st		z, w
+0002a6 e0f2                      	ldi		zh, high(which_pb)
+0002a7 e0e2                      	ldi		zl, low(which_pb)
+0002a8 e001                      	ldi		w, 1
+0002a9 8300                      	st		z, w
                                  
-0002a2 c00d                      	rjmp	pb1_state_end
+0002aa c00d                      	rjmp	pb1_state_end
                                  pb1_state1:
-0002a3 3021                      	cpi		r18, 1
-0002a4 f459                      	brne	pb1_state_end
+0002ab 3021                      	cpi		r18, 1
+0002ac f459                      	brne	pb1_state_end
                                  	
                                  	; turn off timer
-0002a5 9250 00a1                 	sts		TCCR4B, zero
-0002a7 9250 0072                 	sts		TIMSK4, zero
+0002ad 9250 00a1                 	sts		TCCR4B, zero
+0002af 9250 0072                 	sts		TIMSK4, zero
                                  
                                  	; change push button to push down
-0002a9 9100 0069                 	lds		w, EICRA
-0002ab 7f03                      	andi	w, 0b11110011
-0002ac 6008                      	ori		w, (0b10 << ISC10)
-0002ad 9300 0069                 	sts		EICRA, w
+0002b1 9100 0069                 	lds		w, EICRA
+0002b3 7f03                      	andi	w, 0b11110011
+0002b4 6008                      	ori		w, (0b10 << ISC10)
+0002b5 9300 0069                 	sts		EICRA, w
                                  
                                  	; return push button state to 0
-0002af 8250                      	st		z, zero
+0002b7 8250                      	st		z, zero
                                  pb1_state_end:
+                                 	
+0002b8 b925                      	out		PORTB, r18
+0002b9 bf1f                      	out		sreg, r17
                                  
-0002b0 bf1f                      	out		sreg, r17
-                                 
-0002b1 905f                      	pop		zero
-0002b2 912f                      	pop		r18
-0002b3 911f                      	pop		r17
-0002b4 910f                      	pop		w
-0002b5 91ff                      	pop		zh
-0002b6 91ef                      	pop		zl
-0002b7 9518                      	reti
+0002ba 905f                      	pop		zero
+0002bb 912f                      	pop		r18
+0002bc 911f                      	pop		r17
+0002bd 910f                      	pop		w
+0002be 91ff                      	pop		zh
+0002bf 91ef                      	pop		zl
+0002c0 9518                      	reti
                                  
                                  pb_timeout:
-0002b8 93ef                      	push	zl
-0002b9 93ff                      	push	zh
-0002ba 930f                      	push	w
-0002bb 931f                      	push	r17
-0002bc 925f                      	push	zero
-0002bd 932f                      	push	r18
+0002c1 93ef                      	push	zl
+0002c2 93ff                      	push	zh
+0002c3 930f                      	push	w
+0002c4 931f                      	push	r17
+0002c5 925f                      	push	zero
+0002c6 932f                      	push	r18
                                  
-0002be b71f                      	in		r17, sreg
+0002c7 b71f                      	in		r17, sreg
                                  
-0002bf 2455                      	clr		zero
+0002c8 2455                      	clr		zero
                                  
-0002c0 e0f2                      	ldi		zh, high(which_pb)
-0002c1 e1e3                      	ldi		zl, low(which_pb)
+0002c9 e0f2                      	ldi		zh, high(which_pb)
+0002ca e0e2                      	ldi		zl, low(which_pb)
                                  
-0002c2 8120                      	ld		r18, z
+0002cb 8120                      	ld		r18, z
                                  
                                  timeout_pb0:
-0002c3 3020                      	cpi		r18, 0
-0002c4 f409                      	brne	timeout_pb1
+0002cc 3020                      	cpi		r18, 0
+0002cd f409                      	brne	timeout_pb1
                                   
                                  	; start led countdown
                                  
-0002c5 c002                      	rjmp	end_timeout_sel
+0002ce c004                      	rjmp	end_timeout_sel
                                  timeout_pb1:
-0002c6 3021                      	cpi		r18, 1
-0002c7 f401                      	brne	end_timeout_sel
+0002cf 3021                      	cpi		r18, 1
+0002d0 f411                      	brne	end_timeout_sel
                                  
                                  	; play cancel stuff
-                                 
+0002d1 d47a                      	rcall init_beeps
+0002d2 d464                      	rcall bee_eep
                                  end_timeout_sel:
                                  
                                  	; pop patient from queue
-0002c8 df21                      	rcall	dequeue
-0002c9 d14c                      	rcall	LCD_DISPLAY_MODE
-0002ca d40a                      	rcall	display_front_patient
+0002d3 df28                      	rcall	dequeue
+0002d4 d14c                      	rcall	LCD_DISPLAY_MODE
+0002d5 d48d                      	rcall	display_front_patient
                                  
-0002cb e0f2                      	ldi		zh, high(num_patients)
-0002cc e0e8                      	ldi		zl, low(num_patients)
-0002cd 8100                      	ld		w, z
-0002ce 3000                      	cpi		w, 0
-0002cf f419                      	brne	timeout_no_patients
-0002d0 b30d                      	in		w, EIMSK
-0002d1 7f0e                      	andi	w, 0b11111110
-0002d2 bb0d                      	out		EIMSK, w
+0002d6 e0f2                      	ldi		zh, high(num_patients)
+0002d7 e1e2                      	ldi		zl, low(num_patients)
+0002d8 8100                      	ld		w, z
+0002d9 3000                      	cpi		w, 0
+0002da f419                      	brne	timeout_no_patients
+0002db b30d                      	in		w, EIMSK
+0002dc 7f0e                      	andi	w, 0b11111110
+0002dd bb0d                      	out		EIMSK, w
                                  timeout_no_patients:
                                  
                                  	; remove pb1 interrupt
-0002d3 b30d                      	in		w, EIMSK
-0002d4 7f0d                      	andi	w, 0b11111101	
-0002d5 bb0d                      	out		EIMSK, w
+0002de b30d                      	in		w, EIMSK
+0002df 7f0d                      	andi	w, 0b11111101	
+0002e0 bb0d                      	out		EIMSK, w
                                  
                                  	; reset pb0 interrupt
                                  
                                  	; turn off timer
-0002d6 9250 00a1                 	sts		TCCR4B, zero
-0002d8 9250 0072                 	sts		TIMSK4, zero
+0002e1 9250 00a1                 	sts		TCCR4B, zero
+0002e3 9250 0072                 	sts		TIMSK4, zero
                                  
-0002da bf1f                      	out		sreg, r17
+0002e5 bf1f                      	out		sreg, r17
                                  
-0002db 912f                      	pop		r18
-0002dc 905f                      	pop		zero
-0002dd 911f                      	pop		r17
-0002de 910f                      	pop		w
-0002df 91ff                      	pop		zh
-0002e0 91ef                      	pop		zl
-0002e1 9518                      	reti
+0002e6 912f                      	pop		r18
+0002e7 905f                      	pop		zero
+0002e8 911f                      	pop		r17
+0002e9 910f                      	pop		w
+0002ea 91ff                      	pop		zh
+0002eb 91ef                      	pop		zl
+0002ec 9518                      	reti
                                  
                                  keypad_timeout:
-0002e2 93ef                      	push	zl
-0002e3 93ff                      	push	zh
-0002e4 92af                      	push	arg0
-0002e5 92bf                      	push	arg1
-0002e6 938f                      	push	r24
-0002e7 933f                      	push	r19
-0002e8 930f                      	push	w
-0002e9 925f                      	push	zero
+0002ed 93ef                      	push	zl
+0002ee 93ff                      	push	zh
+0002ef 92af                      	push	arg0
+0002f0 92bf                      	push	arg1
+0002f1 938f                      	push	r24
+0002f2 933f                      	push	r19
+0002f3 930f                      	push	w
+0002f4 925f                      	push	zero
                                  
-0002ea b70f                      	in		w, sreg
+0002f5 b70f                      	in		w, sreg
                                  
-0002eb 930f                      	push	w
+0002f6 930f                      	push	w
                                  
-0002ec 2455                      	clr		zero
-0002ed 9250 0091                 	sts		TCCR3B, zero
-0002ef 9250 0071                 	sts		TIMSK3, zero					; disable_keypad_timer()
+0002f7 2455                      	clr		zero
+0002f8 9250 0091                 	sts		TCCR3B, zero
+0002fa 9250 0071                 	sts		TIMSK3, zero					; disable_keypad_timer()
                                  
-0002f1 e0f2                      	ldi		zh, high(new_name)				; new_name[new_name_cur] = keypad_to_ascii(last_key_pressed, times_key_pressed)
-0002f2 e0e0                      	ldi		zl, low(new_name)
+0002fc e0f2                      	ldi		zh, high(new_name)				; new_name[new_name_cur] = keypad_to_ascii(last_key_pressed, times_key_pressed)
+0002fd e0ea                      	ldi		zl, low(new_name)
                                  
-0002f3 0de3                      	add		zl, new_name_cur
-0002f4 1df5                      	adc		zh, zero
+0002fe 0de3                      	add		zl, new_name_cur
+0002ff 1df5                      	adc		zh, zero
                                  
-0002f5 2ca6                      	mov		arg0, last_key_pressed
-0002f6 2cb7                      	mov		arg1, times_key_pressed
-0002f7 de50                      	rcall	keypad_to_ascii
+000300 2ca6                      	mov		arg0, last_key_pressed
+000301 2cb7                      	mov		arg1, times_key_pressed
+000302 de57                      	rcall	keypad_to_ascii
                                  
-0002f8 8380                      	st		z, r24
+000303 8380                      	st		z, r24
                                  
-0002f9 2f38                      	mov		r19, r24
-0002fa d364                      	rcall	WRITE
+000304 2f38                      	mov		r19, r24
+000305 d364                      	rcall	WRITE
                                  
-0002fb e0f2                      	ldi		zh, high(is_keypad_timeout)
-0002fc e1e0                      	ldi		zl, low(is_keypad_timeout)
-0002fd e001                      	ldi		w, 1
-0002fe 8300                      	st		z, w
+000306 e0f2                      	ldi		zh, high(is_keypad_timeout)
+000307 e0e9                      	ldi		zl, low(is_keypad_timeout)
+000308 e001                      	ldi		w, 1
+000309 8300                      	st		z, w
                                  
-0002ff 910f                      	pop		w
+00030a 910f                      	pop		w
                                  
-000300 bf0f                      	out		sreg, w
+00030b bf0f                      	out		sreg, w
                                  
-000301 905f                      	pop		zero
-000302 910f                      	pop		w
-000303 913f                      	pop		r19
-000304 918f                      	pop		r24
-000305 90bf                      	pop		arg1
-000306 90af                      	pop		arg0
-000307 91ff                      	pop		zh
-000308 91ef                      	pop		zl
-000309 9518                      	reti
+00030c 905f                      	pop		zero
+00030d 910f                      	pop		w
+00030e 913f                      	pop		r19
+00030f 918f                      	pop		r24
+000310 90bf                      	pop		arg1
+000311 90af                      	pop		arg0
+000312 91ff                      	pop		zh
+000313 91ef                      	pop		zl
+000314 9518                      	reti
                                  	
                                  ; initialise the LCD
                                  INITIALISE_LCD:
                                  	; prologue
-00030a 930f                      	push r16
-00030b 931f                      	push r17
-00030c 932f                      	push r18
-00030d 933f                      	push r19
-00030e 93cf                      	push YL
-00030f 93df                      	push YH
-000310 b7cd                      	in YL, SPL
-000311 b7de                      	in YH, SPH
-000312 9721                      	sbiw Y, 1
+000315 930f                      	push r16
+000316 931f                      	push r17
+000317 932f                      	push r18
+000318 933f                      	push r19
+000319 93cf                      	push YL
+00031a 93df                      	push YH
+00031b b7cd                      	in YL, SPL
+00031c b7de                      	in YH, SPH
+00031d 9721                      	sbiw Y, 1
                                  
-000313 ef1f                      	ser r17
-000314 bb10                      	out DDRF, r17			; LCD r16
-000315 b911                      	out DDRA, r17			; LCD Ctrl
-000316 2711                      	clr r17
-000317 bb11                      	out PORTF, r17
-000318 b912                      	out PORTA, r17
+00031e ef1f                      	ser r17
+00031f bb10                      	out DDRF, r17			; LCD r16
+000320 b911                      	out DDRA, r17			; LCD Ctrl
+000321 2711                      	clr r17
+000322 bb11                      	out PORTF, r17
+000323 b912                      	out PORTA, r17
                                  	;
-000319 e928                      	ldi r18, low(15000)		; delay 15ms
-00031a e33a                      	ldi r19, high(15000)
-00031b e013
-00031c 951a
-00031d 0000
-00031e f7e9
-00031f 5021
-000320 4030
-000321 f7c9                      	delay
-000322 e308                      	ldi r16, 0b00111000	; 2 x 5 x 7 r18 = 1, 8bits | N = 1, 2-line | F = 0, 5 x 7 dots
-000323 bb01
-000324 9817
-000325 9815
-000326 0000
-000327 9a16
+000324 e928                      	ldi r18, low(15000)		; delay 15ms
+000325 e33a                      	ldi r19, high(15000)
+000326 e013
+000327 951a
 000328 0000
-000329 0000
-00032a 0000
-00032b 9816
-00032c 0000
-00032d 0000
-00032e 0000                      	lcd_write_cmd			; 1st function cmd set
-                                 
-00032f e024                      	ldi r18, low(4100)		; delay 4.1ms
-000330 e130                      	ldi r19, high(4100)
-000331 e013
-000332 951a
+000329 f7e9
+00032a 5021
+00032b 4030
+00032c f7c9                      	delay
+00032d e308                      	ldi r16, 0b00111000	; 2 x 5 x 7 r18 = 1, 8bits | N = 1, 2-line | F = 0, 5 x 7 dots
+00032e bb01
+00032f 9817
+000330 9815
+000331 0000
+000332 9a16
 000333 0000
-000334 f7e9
-000335 5021
-000336 4030
-000337 f7c9                      	delay
-000338 bb01
-000339 9817
-00033a 9815
-00033b 0000
-00033c 9a16
-00033d 0000
-00033e 0000
-00033f 0000
-000340 9816
-000341 0000
-000342 0000
-000343 0000                      	lcd_write_cmd			; 2nd function cmd set
+000334 0000
+000335 0000
+000336 9816
+000337 0000
+000338 0000
+000339 0000                      	lcd_write_cmd			; 1st function cmd set
                                  
-000344 e624                      	ldi r18, low(100)		; delay 4.1ms
-000345 e030                      	ldi r19, high(100)
-000346 e013
-000347 951a
+00033a e024                      	ldi r18, low(4100)		; delay 4.1ms
+00033b e130                      	ldi r19, high(4100)
+00033c e013
+00033d 951a
+00033e 0000
+00033f f7e9
+000340 5021
+000341 4030
+000342 f7c9                      	delay
+000343 bb01
+000344 9817
+000345 9815
+000346 0000
+000347 9a16
 000348 0000
-000349 f7e9
-00034a 5021
-00034b 4030
-00034c f7c9                      	delay
-00034d bb01
-00034e 9817
-00034f 9815
-000350 0000
-000351 9a16
-000352 0000
+000349 0000
+00034a 0000
+00034b 9816
+00034c 0000
+00034d 0000
+00034e 0000                      	lcd_write_cmd			; 2nd function cmd set
+                                 
+00034f e624                      	ldi r18, low(100)		; delay 4.1ms
+000350 e030                      	ldi r19, high(100)
+000351 e013
+000352 951a
 000353 0000
-000354 0000
-000355 9816
-000356 0000
-000357 0000
-000358 0000                      	lcd_write_cmd			; 3rd function cmd set
-000359 bb01
-00035a 9817
-00035b 9815
-00035c 0000
-00035d 9a16
+000354 f7e9
+000355 5021
+000356 4030
+000357 f7c9                      	delay
+000358 bb01
+000359 9817
+00035a 9815
+00035b 0000
+00035c 9a16
+00035d 0000
 00035e 0000
 00035f 0000
-000360 0000
-000361 9816
+000360 9816
+000361 0000
 000362 0000
-000363 0000
-000364 0000                      	lcd_write_cmd			; final function cmd set
-                                 	;
-000365 2711
-000366 bb10
-000367 9817
-000368 9a15
+000363 0000                      	lcd_write_cmd			; 3rd function cmd set
+000364 bb01
+000365 9817
+000366 9815
+000367 0000
+000368 9a16
 000369 0000
-00036a 9a16
+00036a 0000
 00036b 0000
-00036c 0000
+00036c 9816
 00036d 0000
-00036e b11f
-00036f 9816
-000370 fd17
-000371 cff7
-000372 0000
-000373 0000
+00036e 0000
+00036f 0000                      	lcd_write_cmd			; final function cmd set
+                                 	;
+000370 2711
+000371 bb10
+000372 9817
+000373 9a15
 000374 0000
-000375 9817
-000376 9815
-000377 ef1f
-000378 bb10
-000379 0000
-00037a 0000
-00037b 0000                      	lcd_wait_busy			; wait until ready
-                                 
-00037c e008                      	ldi r16, 0b00001000	; LCD display off
-00037d bb01
-00037e 9817
-00037f 9815
-000380 0000
-000381 9a16
-000382 0000
-000383 0000
+000375 9a16
+000376 0000
+000377 0000
+000378 0000
+000379 b11f
+00037a 9816
+00037b fd17
+00037c cff7
+00037d 0000
+00037e 0000
+00037f 0000
+000380 9817
+000381 9815
+000382 ef1f
+000383 bb10
 000384 0000
-000385 9816
-000386 0000
-000387 0000
-000388 0000                      	lcd_write_cmd
-000389 2711
-00038a bb10
-00038b 9817
-00038c 9a15
+000385 0000
+000386 0000                      	lcd_wait_busy			; wait until ready
+                                 
+000387 e008                      	ldi r16, 0b00001000	; LCD display off
+000388 bb01
+000389 9817
+00038a 9815
+00038b 0000
+00038c 9a16
 00038d 0000
-00038e 9a16
+00038e 0000
 00038f 0000
-000390 0000
+000390 9816
 000391 0000
-000392 b11f
-000393 9816
-000394 fd17
-000395 cff7
-000396 0000
-000397 0000
+000392 0000
+000393 0000                      	lcd_write_cmd
+000394 2711
+000395 bb10
+000396 9817
+000397 9a15
 000398 0000
-000399 9817
-00039a 9815
-00039b ef1f
-00039c bb10
-00039d 0000
-00039e 0000
-00039f 0000                      	lcd_wait_busy
-                                 
-0003a0 e001                      	ldi r16, 0b00000001	; LCD display clear
-0003a1 bb01
-0003a2 9817
-0003a3 9815
-0003a4 0000
-0003a5 9a16
-0003a6 0000
-0003a7 0000
+000399 9a16
+00039a 0000
+00039b 0000
+00039c 0000
+00039d b11f
+00039e 9816
+00039f fd17
+0003a0 cff7
+0003a1 0000
+0003a2 0000
+0003a3 0000
+0003a4 9817
+0003a5 9815
+0003a6 ef1f
+0003a7 bb10
 0003a8 0000
-0003a9 9816
-0003aa 0000
-0003ab 0000
-0003ac 0000                      	lcd_write_cmd
-0003ad 2711
-0003ae bb10
-0003af 9817
-0003b0 9a15
+0003a9 0000
+0003aa 0000                      	lcd_wait_busy
+                                 
+0003ab e001                      	ldi r16, 0b00000001	; LCD display clear
+0003ac bb01
+0003ad 9817
+0003ae 9815
+0003af 0000
+0003b0 9a16
 0003b1 0000
-0003b2 9a16
+0003b2 0000
 0003b3 0000
-0003b4 0000
+0003b4 9816
 0003b5 0000
-0003b6 b11f
-0003b7 9816
-0003b8 fd17
-0003b9 cff7
-0003ba 0000
-0003bb 0000
+0003b6 0000
+0003b7 0000                      	lcd_write_cmd
+0003b8 2711
+0003b9 bb10
+0003ba 9817
+0003bb 9a15
 0003bc 0000
-0003bd 9817
-0003be 9815
-0003bf ef1f
-0003c0 bb10
-0003c1 0000
-0003c2 0000
-0003c3 0000                      	lcd_wait_busy
-                                 
-0003c4 e006                      	ldi r16, 0b00000110	; increment, no shift
-0003c5 bb01
-0003c6 9817
-0003c7 9815
-0003c8 0000
-0003c9 9a16
-0003ca 0000
-0003cb 0000
+0003bd 9a16
+0003be 0000
+0003bf 0000
+0003c0 0000
+0003c1 b11f
+0003c2 9816
+0003c3 fd17
+0003c4 cff7
+0003c5 0000
+0003c6 0000
+0003c7 0000
+0003c8 9817
+0003c9 9815
+0003ca ef1f
+0003cb bb10
 0003cc 0000
-0003cd 9816
-0003ce 0000
-0003cf 0000
-0003d0 0000                      	lcd_write_cmd
-0003d1 2711
-0003d2 bb10
-0003d3 9817
-0003d4 9a15
-0003d5 0000
-0003d6 9a16
-0003d7 0000
-0003d8 0000
-0003d9 0000
-0003da b11f
-0003db 9816
-0003dc fd17
-0003dd cff7
-0003de 0000
-0003df 0000
-0003e0 0000
-0003e1 9817
-0003e2 9815
-0003e3 ef1f
-0003e4 bb10
-0003e5 0000
-0003e6 0000
-0003e7 0000                      	lcd_wait_busy
+0003cd 0000
+0003ce 0000                      	lcd_wait_busy
                                  
-0003e8 e00e                      	ldi r16, 0b00001110	; LCD display on, no cursor, blink
-0003e9 bb01
-0003ea 9817
-0003eb 9815
-0003ec 0000
-0003ed 9a16
-0003ee 0000
-0003ef 0000
+0003cf e006                      	ldi r16, 0b00000110	; increment, no shift
+0003d0 bb01
+0003d1 9817
+0003d2 9815
+0003d3 0000
+0003d4 9a16
+0003d5 0000
+0003d6 0000
+0003d7 0000
+0003d8 9816
+0003d9 0000
+0003da 0000
+0003db 0000                      	lcd_write_cmd
+0003dc 2711
+0003dd bb10
+0003de 9817
+0003df 9a15
+0003e0 0000
+0003e1 9a16
+0003e2 0000
+0003e3 0000
+0003e4 0000
+0003e5 b11f
+0003e6 9816
+0003e7 fd17
+0003e8 cff7
+0003e9 0000
+0003ea 0000
+0003eb 0000
+0003ec 9817
+0003ed 9815
+0003ee ef1f
+0003ef bb10
 0003f0 0000
-0003f1 9816
-0003f2 0000
-0003f3 0000
-0003f4 0000                      	lcd_write_cmd
-0003f5 2711
-0003f6 bb10
-0003f7 9817
-0003f8 9a15
+0003f1 0000
+0003f2 0000                      	lcd_wait_busy
+                                 
+0003f3 e00e                      	ldi r16, 0b00001110	; LCD display on, no cursor, blink
+0003f4 bb01
+0003f5 9817
+0003f6 9815
+0003f7 0000
+0003f8 9a16
 0003f9 0000
-0003fa 9a16
+0003fa 0000
 0003fb 0000
-0003fc 0000
+0003fc 9816
 0003fd 0000
-0003fe b11f
-0003ff 9816
-000400 fd17
-000401 cff7
-000402 0000
-000403 0000
+0003fe 0000
+0003ff 0000                      	lcd_write_cmd
+000400 2711
+000401 bb10
+000402 9817
+000403 9a15
 000404 0000
-000405 9817
-000406 9815
-000407 ef1f
-000408 bb10
-000409 0000
-00040a 0000
-00040b 0000                      	lcd_wait_busy
+000405 9a16
+000406 0000
+000407 0000
+000408 0000
+000409 b11f
+00040a 9816
+00040b fd17
+00040c cff7
+00040d 0000
+00040e 0000
+00040f 0000
+000410 9817
+000411 9815
+000412 ef1f
+000413 bb10
+000414 0000
+000415 0000
+000416 0000                      	lcd_wait_busy
                                  
                                  	;epilogue
-00040c 9621                      	adiw Y, 1
-00040d bfde                      	out SPH, YH
-00040e bfcd                      	out SPL, YL
-00040f 91df                      	pop YH
-000410 91cf                      	pop YL
-000411 913f                      	pop r19
-000412 912f                      	pop r18
-000413 911f                      	pop r17
-000414 910f                      	pop r16
-000415 9508                      	ret
+000417 9621                      	adiw Y, 1
+000418 bfde                      	out SPH, YH
+000419 bfcd                      	out SPL, YL
+00041a 91df                      	pop YH
+00041b 91cf                      	pop YL
+00041c 913f                      	pop r19
+00041d 912f                      	pop r18
+00041e 911f                      	pop r17
+00041f 910f                      	pop r16
+000420 9508                      	ret
                                  
                                  ; clears the LCD display and sets it to display mode
                                  LCD_DISPLAY_MODE:
                                  	; prologue
-000416 930f                      	push r16
-000417 931f                      	push r17
-000418 932f                      	push r18
-000419 933f                      	push r19
-00041a 93cf                      	push YL
-00041b 93df                      	push YH
-00041c b7cd                      	in YL, SPL
-00041d b7de                      	in YH, SPH
-00041e 9721                      	sbiw Y, 1
-00041f 9a11                      	set_strobe				; STROBE on
+000421 930f                      	push r16
+000422 931f                      	push r17
+000423 932f                      	push r18
+000424 933f                      	push r19
+000425 93cf                      	push YL
+000426 93df                      	push YH
+000427 b7cd                      	in YL, SPL
+000428 b7de                      	in YH, SPH
+000429 9721                      	sbiw Y, 1
+00042a 9a11                      	set_strobe				; STROBE on
                                  	
-000420 e001                      	ldi r16, 0b00000001	; clear display
-000421 bb01
-000422 9817
-000423 9815
-000424 0000
-000425 9a16
-000426 0000
-000427 0000
-000428 0000
-000429 9816
-00042a 0000
-00042b 0000
-00042c 0000                      	lcd_write_cmd
-00042d 2711
-00042e bb10
-00042f 9817
-000430 9a15
+00042b e001                      	ldi r16, 0b00000001	; clear display
+00042c bb01
+00042d 9817
+00042e 9815
+00042f 0000
+000430 9a16
 000431 0000
-000432 9a16
+000432 0000
 000433 0000
-000434 0000
+000434 9816
 000435 0000
-000436 b11f
-000437 9816
-000438 fd17
-000439 cff7
-00043a 0000
-00043b 0000
+000436 0000
+000437 0000                      	lcd_write_cmd
+000438 2711
+000439 bb10
+00043a 9817
+00043b 9a15
 00043c 0000
-00043d 9817
-00043e 9815
-00043f ef1f
-000440 bb10
-000441 0000
-000442 0000
-000443 0000                      	lcd_wait_busy
+00043d 9a16
+00043e 0000
+00043f 0000
+000440 0000
+000441 b11f
+000442 9816
+000443 fd17
+000444 cff7
+000445 0000
+000446 0000
+000447 0000
+000448 9817
+000449 9815
+00044a ef1f
+00044b bb10
+00044c 0000
+00044d 0000
+00044e 0000                      	lcd_wait_busy
                                  
-000444 e43e                      	ldi r19, 'N'			; display "Next Patient:"
-000445 d219                      	rcall WRITE
-000446 e635                      	ldi r19, 'e'
-000447 d217                      	rcall WRITE
-000448 e738                      	ldi r19, 'x'
-000449 d215                      	rcall WRITE
-00044a e734                      	ldi r19, 't'
-00044b d213                      	rcall WRITE
-00044c e230                      	ldi r19, ' '
-00044d d211                      	rcall WRITE
-00044e e530                      	ldi r19, 'P'
-00044f d20f                      	rcall WRITE
-000450 e631                      	ldi r19, 'a'
-000451 d20d                      	rcall WRITE
-000452 e734                      	ldi r19, 't'
-000453 d20b                      	rcall WRITE
-000454 e639                      	ldi r19, 'i'
-000455 d209                      	rcall WRITE
-000456 e635                      	ldi r19, 'e'
-000457 d207                      	rcall WRITE
-000458 e63e                      	ldi r19, 'n'
-000459 d205                      	rcall WRITE
-00045a e734                      	ldi r19, 't'
-00045b d203                      	rcall WRITE
-00045c e33a                      	ldi r19, ':'
-00045d d201                      	rcall WRITE
+00044f e43e                      	ldi r19, 'N'			; display "Next Patient:"
+000450 d219                      	rcall WRITE
+000451 e635                      	ldi r19, 'e'
+000452 d217                      	rcall WRITE
+000453 e738                      	ldi r19, 'x'
+000454 d215                      	rcall WRITE
+000455 e734                      	ldi r19, 't'
+000456 d213                      	rcall WRITE
+000457 e230                      	ldi r19, ' '
+000458 d211                      	rcall WRITE
+000459 e530                      	ldi r19, 'P'
+00045a d20f                      	rcall WRITE
+00045b e631                      	ldi r19, 'a'
+00045c d20d                      	rcall WRITE
+00045d e734                      	ldi r19, 't'
+00045e d20b                      	rcall WRITE
+00045f e639                      	ldi r19, 'i'
+000460 d209                      	rcall WRITE
+000461 e635                      	ldi r19, 'e'
+000462 d207                      	rcall WRITE
+000463 e63e                      	ldi r19, 'n'
+000464 d205                      	rcall WRITE
+000465 e734                      	ldi r19, 't'
+000466 d203                      	rcall WRITE
+000467 e33a                      	ldi r19, ':'
+000468 d201                      	rcall WRITE
                                  	
                                  	;epilogue
-00045e 9621                      	adiw Y, 1
-00045f bfde                      	out SPH, YH
-000460 bfcd                      	out SPL, YL
-000461 91df                      	pop YH
-000462 91cf                      	pop YL
-000463 913f                      	pop r19
-000464 912f                      	pop r18
-000465 911f                      	pop r17
-000466 910f                      	pop r16
-000467 9508                      	ret
+000469 9621                      	adiw Y, 1
+00046a bfde                      	out SPH, YH
+00046b bfcd                      	out SPL, YL
+00046c 91df                      	pop YH
+00046d 91cf                      	pop YL
+00046e 913f                      	pop r19
+00046f 912f                      	pop r18
+000470 911f                      	pop r17
+000471 910f                      	pop r16
+000472 9508                      	ret
                                  
                                  ; shifts cursor to bottom left of screen
                                  DISPLAY_BOTTOM_LEFT:
                                  	; prologue
-000468 930f                      	push r16
-000469 931f                      	push r17
-00046a 932f                      	push r18
-00046b 933f                      	push r19
-00046c 93cf                      	push YL
-00046d 93df                      	push YH
-00046e b7cd                      	in YL, SPL
-00046f b7de                      	in YH, SPH
-000470 9721                      	sbiw Y, 1
+000473 930f                      	push r16
+000474 931f                      	push r17
+000475 932f                      	push r18
+000476 933f                      	push r19
+000477 93cf                      	push YL
+000478 93df                      	push YH
+000479 b7cd                      	in YL, SPL
+00047a b7de                      	in YH, SPH
+00047b 9721                      	sbiw Y, 1
                                  
-000471 ec00                      	ldi r16, 0b11000000	; Set DDRAM address to bottom left
-000472 bb01
-000473 9817
-000474 9815
-000475 0000
-000476 9a16
-000477 0000
-000478 0000
-000479 0000
-00047a 9816
-00047b 0000
-00047c 0000
-00047d 0000                      	lcd_write_cmd
-00047e 2711
-00047f bb10
-000480 9817
-000481 9a15
+00047c ec00                      	ldi r16, 0b11000000	; Set DDRAM address to bottom left
+00047d bb01
+00047e 9817
+00047f 9815
+000480 0000
+000481 9a16
 000482 0000
-000483 9a16
+000483 0000
 000484 0000
-000485 0000
+000485 9816
 000486 0000
-000487 b11f
-000488 9816
-000489 fd17
-00048a cff7
-00048b 0000
-00048c 0000
+000487 0000
+000488 0000                      	lcd_write_cmd
+000489 2711
+00048a bb10
+00048b 9817
+00048c 9a15
 00048d 0000
-00048e 9817
-00048f 9815
-000490 ef1f
-000491 bb10
-000492 0000
-000493 0000
-000494 0000                      	lcd_wait_busy
+00048e 9a16
+00048f 0000
+000490 0000
+000491 0000
+000492 b11f
+000493 9816
+000494 fd17
+000495 cff7
+000496 0000
+000497 0000
+000498 0000
+000499 9817
+00049a 9815
+00049b ef1f
+00049c bb10
+00049d 0000
+00049e 0000
+00049f 0000                      	lcd_wait_busy
                                  
                                  	;epilogue
-000495 9621                      	adiw Y, 1
-000496 bfde                      	out SPH, YH
-000497 bfcd                      	out SPL, YL
-000498 91df                      	pop YH
-000499 91cf                      	pop YL
-00049a 913f                      	pop r19
-00049b 912f                      	pop r18
-00049c 911f                      	pop r17
-00049d 910f                      	pop r16
-00049e 9508                      	ret
+0004a0 9621                      	adiw Y, 1
+0004a1 bfde                      	out SPH, YH
+0004a2 bfcd                      	out SPL, YL
+0004a3 91df                      	pop YH
+0004a4 91cf                      	pop YL
+0004a5 913f                      	pop r19
+0004a6 912f                      	pop r18
+0004a7 911f                      	pop r17
+0004a8 910f                      	pop r16
+0004a9 9508                      	ret
                                  
                                  ;expects unsigned int as parameter in r19 and displays bottom right aligned number
                                  DISPLAY_NUMBER_RIGHT:
                                  	; prologue
-00049f 930f                      	push r16
-0004a0 931f                      	push r17
-0004a1 932f                      	push r18
-0004a2 933f                      	push r19
-0004a3 93cf                      	push YL
-0004a4 93df                      	push YH
-0004a5 b7cd                      	in YL, SPL
-0004a6 b7de                      	in YH, SPH
-0004a7 9721                      	sbiw Y, 1
+0004aa 930f                      	push r16
+0004ab 931f                      	push r17
+0004ac 932f                      	push r18
+0004ad 933f                      	push r19
+0004ae 93cf                      	push YL
+0004af 93df                      	push YH
+0004b0 b7cd                      	in YL, SPL
+0004b1 b7de                      	in YH, SPH
+0004b2 9721                      	sbiw Y, 1
                                  
-0004a8 ec0f                      	ldi r16, 0b11001111	; Set DDRAM address to bottom right
-0004a9 bb01
-0004aa 9817
-0004ab 9815
-0004ac 0000
-0004ad 9a16
-0004ae 0000
-0004af 0000
-0004b0 0000
-0004b1 9816
-0004b2 0000
-0004b3 0000
-0004b4 0000                      	lcd_write_cmd
-0004b5 2711
-0004b6 bb10
-0004b7 9817
-0004b8 9a15
+0004b3 ec0f                      	ldi r16, 0b11001111	; Set DDRAM address to bottom right
+0004b4 bb01
+0004b5 9817
+0004b6 9815
+0004b7 0000
+0004b8 9a16
 0004b9 0000
-0004ba 9a16
+0004ba 0000
 0004bb 0000
-0004bc 0000
+0004bc 9816
 0004bd 0000
-0004be b11f
-0004bf 9816
-0004c0 fd17
-0004c1 cff7
-0004c2 0000
-0004c3 0000
+0004be 0000
+0004bf 0000                      	lcd_write_cmd
+0004c0 2711
+0004c1 bb10
+0004c2 9817
+0004c3 9a15
 0004c4 0000
-0004c5 9817
-0004c6 9815
-0004c7 ef1f
-0004c8 bb10
-0004c9 0000
-0004ca 0000
-0004cb 0000                      	lcd_wait_busy
-0004cc e006                      	ldi r16, 0b00000110	; INCREMENT, no shift
-0004cd bb01
-0004ce 9817
-0004cf 9815
-0004d0 0000
-0004d1 9a16
-0004d2 0000
-0004d3 0000
+0004c5 9a16
+0004c6 0000
+0004c7 0000
+0004c8 0000
+0004c9 b11f
+0004ca 9816
+0004cb fd17
+0004cc cff7
+0004cd 0000
+0004ce 0000
+0004cf 0000
+0004d0 9817
+0004d1 9815
+0004d2 ef1f
+0004d3 bb10
 0004d4 0000
-0004d5 9816
-0004d6 0000
-0004d7 0000
-0004d8 0000                      	lcd_write_cmd
-0004d9 2711
-0004da bb10
-0004db 9817
-0004dc 9a15
+0004d5 0000
+0004d6 0000                      	lcd_wait_busy
+0004d7 e006                      	ldi r16, 0b00000110	; INCREMENT, no shift
+0004d8 bb01
+0004d9 9817
+0004da 9815
+0004db 0000
+0004dc 9a16
 0004dd 0000
-0004de 9a16
+0004de 0000
 0004df 0000
-0004e0 0000
+0004e0 9816
 0004e1 0000
-0004e2 b11f
-0004e3 9816
-0004e4 fd17
-0004e5 cff7
-0004e6 0000
-0004e7 0000
+0004e2 0000
+0004e3 0000                      	lcd_write_cmd
+0004e4 2711
+0004e5 bb10
+0004e6 9817
+0004e7 9a15
 0004e8 0000
-0004e9 9817
-0004ea 9815
-0004eb ef1f
-0004ec bb10
-0004ed 0000
-0004ee 0000
-0004ef 0000                      	lcd_wait_busy
-                                 	
-0004f0 303a                      	cpi r19, 10
-0004f1 f408                      	brsh tens
-0004f2 c04b                      	rjmp display
-                                 tens:
-0004f3 e100                      	ldi r16, 0b00010000	; shift cursor left 1
-0004f4 bb01
-0004f5 9817
-0004f6 9815
-0004f7 0000
-0004f8 9a16
+0004e9 9a16
+0004ea 0000
+0004eb 0000
+0004ec 0000
+0004ed b11f
+0004ee 9816
+0004ef fd17
+0004f0 cff7
+0004f1 0000
+0004f2 0000
+0004f3 0000
+0004f4 9817
+0004f5 9815
+0004f6 ef1f
+0004f7 bb10
+0004f8 0000
 0004f9 0000
-0004fa 0000
-0004fb 0000
-0004fc 9816
-0004fd 0000
-0004fe 0000
-0004ff 0000                      	lcd_write_cmd
-000500 2711
-000501 bb10
-000502 9817
-000503 9a15
+0004fa 0000                      	lcd_wait_busy
+                                 	
+0004fb 303a                      	cpi r19, 10
+0004fc f408                      	brsh tens
+0004fd c04b                      	rjmp display
+                                 tens:
+0004fe e100                      	ldi r16, 0b00010000	; shift cursor left 1
+0004ff bb01
+000500 9817
+000501 9815
+000502 0000
+000503 9a16
 000504 0000
-000505 9a16
+000505 0000
 000506 0000
-000507 0000
+000507 9816
 000508 0000
-000509 b11f
-00050a 9816
-00050b fd17
-00050c cff7
-00050d 0000
-00050e 0000
+000509 0000
+00050a 0000                      	lcd_write_cmd
+00050b 2711
+00050c bb10
+00050d 9817
+00050e 9a15
 00050f 0000
-000510 9817
-000511 9815
-000512 ef1f
-000513 bb10
-000514 0000
-000515 0000
-000516 0000                      	lcd_wait_busy
-000517 3634                      	cpi r19, 100
-000518 f408                      	brsh hundreds
-000519 c024                      	rjmp display
-                                 hundreds:
-00051a e100                      	ldi r16, 0b00010000	; shift cursor left 1
-00051b bb01
-00051c 9817
-00051d 9815
-00051e 0000
-00051f 9a16
+000510 9a16
+000511 0000
+000512 0000
+000513 0000
+000514 b11f
+000515 9816
+000516 fd17
+000517 cff7
+000518 0000
+000519 0000
+00051a 0000
+00051b 9817
+00051c 9815
+00051d ef1f
+00051e bb10
+00051f 0000
 000520 0000
-000521 0000
-000522 0000
-000523 9816
-000524 0000
-000525 0000
-000526 0000                      	lcd_write_cmd
-000527 2711
-000528 bb10
-000529 9817
-00052a 9a15
+000521 0000                      	lcd_wait_busy
+000522 3634                      	cpi r19, 100
+000523 f408                      	brsh hundreds
+000524 c024                      	rjmp display
+                                 hundreds:
+000525 e100                      	ldi r16, 0b00010000	; shift cursor left 1
+000526 bb01
+000527 9817
+000528 9815
+000529 0000
+00052a 9a16
 00052b 0000
-00052c 9a16
+00052c 0000
 00052d 0000
-00052e 0000
+00052e 9816
 00052f 0000
-000530 b11f
-000531 9816
-000532 fd17
-000533 cff7
-000534 0000
-000535 0000
+000530 0000
+000531 0000                      	lcd_write_cmd
+000532 2711
+000533 bb10
+000534 9817
+000535 9a15
 000536 0000
-000537 9817
-000538 9815
-000539 ef1f
-00053a bb10
-00053b 0000
-00053c 0000
-00053d 0000                      	lcd_wait_busy
+000537 9a16
+000538 0000
+000539 0000
+00053a 0000
+00053b b11f
+00053c 9816
+00053d fd17
+00053e cff7
+00053f 0000
+000540 0000
+000541 0000
+000542 9817
+000543 9815
+000544 ef1f
+000545 bb10
+000546 0000
+000547 0000
+000548 0000                      	lcd_wait_busy
                                  display:
-00053e 2f83                      	mov r24, r19
-00053f d151                      	rcall decimal_conversion
+000549 2f83                      	mov r24, r19
+00054a d151                      	rcall decimal_conversion
                                  	;epilogue
-000540 9621                      	adiw Y, 1
-000541 bfde                      	out SPH, YH
-000542 bfcd                      	out SPL, YL
-000543 91df                      	pop YH
-000544 91cf                      	pop YL
-000545 913f                      	pop r19
-000546 912f                      	pop r18
-000547 911f                      	pop r17
-000548 910f                      	pop r16
-000549 9508                      	ret
+00054b 9621                      	adiw Y, 1
+00054c bfde                      	out SPH, YH
+00054d bfcd                      	out SPL, YL
+00054e 91df                      	pop YH
+00054f 91cf                      	pop YL
+000550 913f                      	pop r19
+000551 912f                      	pop r18
+000552 911f                      	pop r17
+000553 910f                      	pop r16
+000554 9508                      	ret
                                  
                                  ; clears LCD display and sets it to entry mode
                                  LCD_ENTRY_MODE:
                                  	; prologue
-00054a 930f                      	push r16
-00054b 931f                      	push r17
-00054c 932f                      	push r18
-00054d 933f                      	push r19
-00054e 93cf                      	push YL
-00054f 93df                      	push YH
-000550 b7cd                      	in YL, SPL
-000551 b7de                      	in YH, SPH
-000552 9721                      	sbiw Y, 1
-000553 9811                      	clr_strobe				; STROBE on
+000555 930f                      	push r16
+000556 931f                      	push r17
+000557 932f                      	push r18
+000558 933f                      	push r19
+000559 93cf                      	push YL
+00055a 93df                      	push YH
+00055b b7cd                      	in YL, SPL
+00055c b7de                      	in YH, SPH
+00055d 9721                      	sbiw Y, 1
+00055e 9811                      	clr_strobe				; STROBE on
                                  	
-000554 e001                      	ldi r16, 0b00000001	; clear display
-000555 bb01
-000556 9817
-000557 9815
-000558 0000
-000559 9a16
-00055a 0000
-00055b 0000
-00055c 0000
-00055d 9816
-00055e 0000
-00055f 0000
-000560 0000                      	lcd_write_cmd
-000561 2711
-000562 bb10
-000563 9817
-000564 9a15
+00055f e001                      	ldi r16, 0b00000001	; clear display
+000560 bb01
+000561 9817
+000562 9815
+000563 0000
+000564 9a16
 000565 0000
-000566 9a16
+000566 0000
 000567 0000
-000568 0000
+000568 9816
 000569 0000
-00056a b11f
-00056b 9816
-00056c fd17
-00056d cff7
-00056e 0000
-00056f 0000
+00056a 0000
+00056b 0000                      	lcd_write_cmd
+00056c 2711
+00056d bb10
+00056e 9817
+00056f 9a15
 000570 0000
-000571 9817
-000572 9815
-000573 ef1f
-000574 bb10
-000575 0000
-000576 0000
-000577 0000                      	lcd_wait_busy
+000571 9a16
+000572 0000
+000573 0000
+000574 0000
+000575 b11f
+000576 9816
+000577 fd17
+000578 cff7
+000579 0000
+00057a 0000
+00057b 0000
+00057c 9817
+00057d 9815
+00057e ef1f
+00057f bb10
+000580 0000
+000581 0000
+000582 0000                      	lcd_wait_busy
                                  
-000578 e435                      	ldi r19, 'E'			; display "Next Patient:"
-000579 d0e5                      	rcall WRITE
-00057a e63e                      	ldi r19, 'n'
-00057b d0e3                      	rcall WRITE
-00057c e734                      	ldi r19, 't'
-00057d d0e1                      	rcall WRITE
-00057e e635                      	ldi r19, 'e'
-00057f d0df                      	rcall WRITE
-000580 e732                      	ldi r19, 'r'
-000581 d0dd                      	rcall WRITE
-000582 e230                      	ldi r19, ' '
-000583 d0db                      	rcall WRITE
-000584 e43e                      	ldi r19, 'N'
-000585 d0d9                      	rcall WRITE
-000586 e631                      	ldi r19, 'a'
-000587 d0d7                      	rcall WRITE
-000588 e63d                      	ldi r19, 'm'
-000589 d0d5                      	rcall WRITE
-00058a e635                      	ldi r19, 'e'
-00058b d0d3                      	rcall WRITE
-00058c e33a                      	ldi r19, ':'
-00058d d0d1                      	rcall WRITE
+000583 e435                      	ldi r19, 'E'			; display "Next Patient:"
+000584 d0e5                      	rcall WRITE
+000585 e63e                      	ldi r19, 'n'
+000586 d0e3                      	rcall WRITE
+000587 e734                      	ldi r19, 't'
+000588 d0e1                      	rcall WRITE
+000589 e635                      	ldi r19, 'e'
+00058a d0df                      	rcall WRITE
+00058b e732                      	ldi r19, 'r'
+00058c d0dd                      	rcall WRITE
+00058d e230                      	ldi r19, ' '
+00058e d0db                      	rcall WRITE
+00058f e43e                      	ldi r19, 'N'
+000590 d0d9                      	rcall WRITE
+000591 e631                      	ldi r19, 'a'
+000592 d0d7                      	rcall WRITE
+000593 e63d                      	ldi r19, 'm'
+000594 d0d5                      	rcall WRITE
+000595 e635                      	ldi r19, 'e'
+000596 d0d3                      	rcall WRITE
+000597 e33a                      	ldi r19, ':'
+000598 d0d1                      	rcall WRITE
                                  	
                                  	;epilogue
-00058e 9621                      	adiw Y, 1
-00058f bfde                      	out SPH, YH
-000590 bfcd                      	out SPL, YL
-000591 91df                      	pop YH
-000592 91cf                      	pop YL
-000593 913f                      	pop r19
-000594 912f                      	pop r18
-000595 911f                      	pop r17
-000596 910f                      	pop r16
-000597 9508                      	ret
+000599 9621                      	adiw Y, 1
+00059a bfde                      	out SPH, YH
+00059b bfcd                      	out SPL, YL
+00059c 91df                      	pop YH
+00059d 91cf                      	pop YL
+00059e 913f                      	pop r19
+00059f 912f                      	pop r18
+0005a0 911f                      	pop r17
+0005a1 910f                      	pop r16
+0005a2 9508                      	ret
                                  
                                  ; expects unsigned int as parameter in r19 and displays descriptive message to patient
                                  ENTRY_MESSAGE:
                                  	; prologue
-000598 930f                      	push r16
-000599 931f                      	push r17
-00059a 932f                      	push r18
-00059b 933f                      	push r19
-00059c 938f                      	push r24
-00059d 93cf                      	push YL
-00059e 93df                      	push YH
-00059f b7cd                      	in YL, SPL
-0005a0 b7de                      	in YH, SPH
-0005a1 9721                      	sbiw Y, 1
+0005a3 930f                      	push r16
+0005a4 931f                      	push r17
+0005a5 932f                      	push r18
+0005a6 933f                      	push r19
+0005a7 938f                      	push r24
+0005a8 93cf                      	push YL
+0005a9 93df                      	push YH
+0005aa b7cd                      	in YL, SPL
+0005ab b7de                      	in YH, SPH
+0005ac 9721                      	sbiw Y, 1
                                  
-0005a2 e001                      	ldi r16, 0b00000001	; clear display
-0005a3 bb01
-0005a4 9817
-0005a5 9815
-0005a6 0000
-0005a7 9a16
-0005a8 0000
-0005a9 0000
-0005aa 0000
-0005ab 9816
-0005ac 0000
-0005ad 0000
-0005ae 0000                      	lcd_write_cmd
-0005af 2711
-0005b0 bb10
-0005b1 9817
-0005b2 9a15
+0005ad e001                      	ldi r16, 0b00000001	; clear display
+0005ae bb01
+0005af 9817
+0005b0 9815
+0005b1 0000
+0005b2 9a16
 0005b3 0000
-0005b4 9a16
+0005b4 0000
 0005b5 0000
-0005b6 0000
+0005b6 9816
 0005b7 0000
-0005b8 b11f
-0005b9 9816
-0005ba fd17
-0005bb cff7
-0005bc 0000
-0005bd 0000
+0005b8 0000
+0005b9 0000                      	lcd_write_cmd
+0005ba 2711
+0005bb bb10
+0005bc 9817
+0005bd 9a15
 0005be 0000
-0005bf 9817
-0005c0 9815
-0005c1 ef1f
-0005c2 bb10
-0005c3 0000
-0005c4 0000
-0005c5 0000                      	lcd_wait_busy
+0005bf 9a16
+0005c0 0000
+0005c1 0000
+0005c2 0000
+0005c3 b11f
+0005c4 9816
+0005c5 fd17
+0005c6 cff7
+0005c7 0000
+0005c8 0000
+0005c9 0000
+0005ca 9817
+0005cb 9815
+0005cc ef1f
+0005cd bb10
+0005ce 0000
+0005cf 0000
+0005d0 0000                      	lcd_wait_busy
                                  
-0005c6 2f83                      	mov r24, r19
+0005d1 2f83                      	mov r24, r19
                                  
-0005c7 e539                      	ldi r19, 'Y'
-0005c8 d096                      	rcall WRITE
-0005c9 e63f                      	ldi r19, 'o'
-0005ca d094                      	rcall WRITE
-0005cb e735                      	ldi r19, 'u'
-0005cc d092                      	rcall WRITE
-0005cd e230                      	ldi r19, ' '
-0005ce d090                      	rcall WRITE
-0005cf e631                      	ldi r19, 'a'
-0005d0 d08e                      	rcall WRITE
-0005d1 e732                      	ldi r19, 'r'
-0005d2 d08c                      	rcall WRITE
-0005d3 e635                      	ldi r19, 'e'
-0005d4 d08a                      	rcall WRITE
-0005d5 e230                      	ldi r19, ' '
-0005d6 d088                      	rcall WRITE
-0005d7 e730                      	ldi r19, 'p'
-0005d8 d086                      	rcall WRITE
-0005d9 e631                      	ldi r19, 'a'
-0005da d084                      	rcall WRITE
-0005db e734                      	ldi r19, 't'
-0005dc d082                      	rcall WRITE
-0005dd e639                      	ldi r19, 'i'
-0005de d080                      	rcall WRITE
-0005df e635                      	ldi r19, 'e'
-0005e0 d07e                      	rcall WRITE
-0005e1 e63e                      	ldi r19, 'n'
-0005e2 d07c                      	rcall WRITE
-0005e3 e734                      	ldi r19, 't'
-0005e4 d07a                      	rcall WRITE
+0005d2 e539                      	ldi r19, 'Y'
+0005d3 d096                      	rcall WRITE
+0005d4 e63f                      	ldi r19, 'o'
+0005d5 d094                      	rcall WRITE
+0005d6 e735                      	ldi r19, 'u'
+0005d7 d092                      	rcall WRITE
+0005d8 e230                      	ldi r19, ' '
+0005d9 d090                      	rcall WRITE
+0005da e631                      	ldi r19, 'a'
+0005db d08e                      	rcall WRITE
+0005dc e732                      	ldi r19, 'r'
+0005dd d08c                      	rcall WRITE
+0005de e635                      	ldi r19, 'e'
+0005df d08a                      	rcall WRITE
+0005e0 e230                      	ldi r19, ' '
+0005e1 d088                      	rcall WRITE
+0005e2 e730                      	ldi r19, 'p'
+0005e3 d086                      	rcall WRITE
+0005e4 e631                      	ldi r19, 'a'
+0005e5 d084                      	rcall WRITE
+0005e6 e734                      	ldi r19, 't'
+0005e7 d082                      	rcall WRITE
+0005e8 e639                      	ldi r19, 'i'
+0005e9 d080                      	rcall WRITE
+0005ea e635                      	ldi r19, 'e'
+0005eb d07e                      	rcall WRITE
+0005ec e63e                      	ldi r19, 'n'
+0005ed d07c                      	rcall WRITE
+0005ee e734                      	ldi r19, 't'
+0005ef d07a                      	rcall WRITE
                                  
-0005e5 de82                      	rcall DISPLAY_BOTTOM_LEFT
+0005f0 de82                      	rcall DISPLAY_BOTTOM_LEFT
                                  
-0005e6 e63e                      	ldi r19, 'n'
-0005e7 d077                      	rcall WRITE
-0005e8 e735                      	ldi r19, 'u'
-0005e9 d075                      	rcall WRITE
-0005ea e63d                      	ldi r19, 'm'
-0005eb d073                      	rcall WRITE
-0005ec e632                      	ldi r19, 'b'
-0005ed d071                      	rcall WRITE
-0005ee e635                      	ldi r19, 'e'
-0005ef d06f                      	rcall WRITE
-0005f0 e732                      	ldi r19, 'r'
-0005f1 d06d                      	rcall WRITE
-0005f2 e33a                      	ldi r19, ':'
-0005f3 d06b                      	rcall WRITE
-0005f4 e230                      	ldi r19, ' '
-0005f5 d069                      	rcall WRITE
-0005f6 d09a                      	rcall decimal_conversion
+0005f1 e63e                      	ldi r19, 'n'
+0005f2 d077                      	rcall WRITE
+0005f3 e735                      	ldi r19, 'u'
+0005f4 d075                      	rcall WRITE
+0005f5 e63d                      	ldi r19, 'm'
+0005f6 d073                      	rcall WRITE
+0005f7 e632                      	ldi r19, 'b'
+0005f8 d071                      	rcall WRITE
+0005f9 e635                      	ldi r19, 'e'
+0005fa d06f                      	rcall WRITE
+0005fb e732                      	ldi r19, 'r'
+0005fc d06d                      	rcall WRITE
+0005fd e33a                      	ldi r19, ':'
+0005fe d06b                      	rcall WRITE
+0005ff e230                      	ldi r19, ' '
+000600 d069                      	rcall WRITE
+000601 d09a                      	rcall decimal_conversion
                                  	;epilogue
-0005f7 9621                      	adiw Y, 1
-0005f8 bfde                      	out SPH, YH
-0005f9 bfcd                      	out SPL, YL
-0005fa 91df                      	pop YH
-0005fb 91cf                      	pop YL
-0005fc 918f                      	pop r24
-0005fd 913f                      	pop r19
-0005fe 912f                      	pop r18
-0005ff 911f                      	pop r17
-000600 910f                      	pop r16
-000601 9508                      	ret
+000602 9621                      	adiw Y, 1
+000603 bfde                      	out SPH, YH
+000604 bfcd                      	out SPL, YL
+000605 91df                      	pop YH
+000606 91cf                      	pop YL
+000607 918f                      	pop r24
+000608 913f                      	pop r19
+000609 912f                      	pop r18
+00060a 911f                      	pop r17
+00060b 910f                      	pop r16
+00060c 9508                      	ret
                                  
                                  ; delete 1 character from patient input in LCD entry mode
                                  BACKSPACE:
                                  	; prologue
-000602 930f                      	push r16
-000603 931f                      	push r17
-000604 932f                      	push r18
-000605 933f                      	push r19
-000606 93cf                      	push YL
-000607 93df                      	push YH
-000608 b7cd                      	in YL, SPL
-000609 b7de                      	in YH, SPH
-00060a 9721                      	sbiw Y, 1
+00060d 930f                      	push r16
+00060e 931f                      	push r17
+00060f 932f                      	push r18
+000610 933f                      	push r19
+000611 93cf                      	push YL
+000612 93df                      	push YH
+000613 b7cd                      	in YL, SPL
+000614 b7de                      	in YH, SPH
+000615 9721                      	sbiw Y, 1
                                  
-00060b e100                      	ldi r16, 0b00010000	; shift cursor left 1
-00060c bb01
-00060d 9817
-00060e 9815
-00060f 0000
-000610 9a16
-000611 0000
-000612 0000
-000613 0000
-000614 9816
-000615 0000
-000616 0000
-000617 0000                      	lcd_write_cmd
-000618 2711
-000619 bb10
-00061a 9817
-00061b 9a15
+000616 e100                      	ldi r16, 0b00010000	; shift cursor left 1
+000617 bb01
+000618 9817
+000619 9815
+00061a 0000
+00061b 9a16
 00061c 0000
-00061d 9a16
+00061d 0000
 00061e 0000
-00061f 0000
+00061f 9816
 000620 0000
-000621 b11f
-000622 9816
-000623 fd17
-000624 cff7
-000625 0000
-000626 0000
+000621 0000
+000622 0000                      	lcd_write_cmd
+000623 2711
+000624 bb10
+000625 9817
+000626 9a15
 000627 0000
-000628 9817
-000629 9815
-00062a ef1f
-00062b bb10
-00062c 0000
-00062d 0000
-00062e 0000                      	lcd_wait_busy
-                                 
-00062f e230                      	ldi r19, ' '			; delete letter
-000630 d02e                      	rcall WRITE
-                                 
-000631 e100                      	ldi r16, 0b00010000	; shift cursor left 1
-000632 bb01
+000628 9a16
+000629 0000
+00062a 0000
+00062b 0000
+00062c b11f
+00062d 9816
+00062e fd17
+00062f cff7
+000630 0000
+000631 0000
+000632 0000
 000633 9817
 000634 9815
-000635 0000
-000636 9a16
+000635 ef1f
+000636 bb10
 000637 0000
 000638 0000
-000639 0000
-00063a 9816
-00063b 0000
-00063c 0000
-00063d 0000                      	lcd_write_cmd
-00063e 2711
-00063f bb10
-000640 9817
-000641 9a15
+000639 0000                      	lcd_wait_busy
+                                 
+00063a e230                      	ldi r19, ' '			; delete letter
+00063b d02e                      	rcall WRITE
+                                 
+00063c e100                      	ldi r16, 0b00010000	; shift cursor left 1
+00063d bb01
+00063e 9817
+00063f 9815
+000640 0000
+000641 9a16
 000642 0000
-000643 9a16
+000643 0000
 000644 0000
-000645 0000
+000645 9816
 000646 0000
-000647 b11f
-000648 9816
-000649 fd17
-00064a cff7
-00064b 0000
-00064c 0000
+000647 0000
+000648 0000                      	lcd_write_cmd
+000649 2711
+00064a bb10
+00064b 9817
+00064c 9a15
 00064d 0000
-00064e 9817
-00064f 9815
-000650 ef1f
-000651 bb10
-000652 0000
-000653 0000
-000654 0000                      	lcd_wait_busy
+00064e 9a16
+00064f 0000
+000650 0000
+000651 0000
+000652 b11f
+000653 9816
+000654 fd17
+000655 cff7
+000656 0000
+000657 0000
+000658 0000
+000659 9817
+00065a 9815
+00065b ef1f
+00065c bb10
+00065d 0000
+00065e 0000
+00065f 0000                      	lcd_wait_busy
                                  
                                  	;epilogue
-000655 9621                      	adiw Y, 1
-000656 bfde                      	out SPH, YH
-000657 bfcd                      	out SPL, YL
-000658 91df                      	pop YH
-000659 91cf                      	pop YL
-00065a 913f                      	pop r19
-00065b 912f                      	pop r18
-00065c 911f                      	pop r17
-00065d 910f                      	pop r16
-00065e 9508                      	ret
+000660 9621                      	adiw Y, 1
+000661 bfde                      	out SPH, YH
+000662 bfcd                      	out SPL, YL
+000663 91df                      	pop YH
+000664 91cf                      	pop YL
+000665 913f                      	pop r19
+000666 912f                      	pop r18
+000667 911f                      	pop r17
+000668 910f                      	pop r16
+000669 9508                      	ret
                                  
                                  ; expects an ASCII character in r19 and displays to current cursor position
                                  WRITE:
                                  	; write to r16
                                  
-00065f 930f                      	push r16
-000660 931f                      	push r17
-000661 93cf                      	push YL
-000662 93df                      	push YH
-000663 b7cd                      	in YL, SPL
-000664 b7de                      	in YH, SPH
-000665 9721                      	sbiw Y, 1
+00066a 930f                      	push r16
+00066b 931f                      	push r17
+00066c 93cf                      	push YL
+00066d 93df                      	push YH
+00066e b7cd                      	in YL, SPL
+00066f b7de                      	in YH, SPH
+000670 9721                      	sbiw Y, 1
                                  
-000666 bb31
-000667 9a17
-000668 9815
-000669 0000
-00066a 9a16
-00066b 0000
-00066c 0000
-00066d 0000
-00066e 9816
-00066f 0000
-000670 0000
-000671 0000                      	lcd_write_data
-000672 2711
-000673 bb10
-000674 9817
-000675 9a15
+000671 bb31
+000672 9a17
+000673 9815
+000674 0000
+000675 9a16
 000676 0000
-000677 9a16
+000677 0000
 000678 0000
-000679 0000
+000679 9816
 00067a 0000
-00067b b11f
-00067c 9816
-00067d fd17
-00067e cff7
-00067f 0000
-000680 0000
+00067b 0000
+00067c 0000                      	lcd_write_data
+00067d 2711
+00067e bb10
+00067f 9817
+000680 9a15
 000681 0000
-000682 9817
-000683 9815
-000684 ef1f
-000685 bb10
-000686 0000
-000687 0000
-000688 0000                      	lcd_wait_busy
+000682 9a16
+000683 0000
+000684 0000
+000685 0000
+000686 b11f
+000687 9816
+000688 fd17
+000689 cff7
+00068a 0000
+00068b 0000
+00068c 0000
+00068d 9817
+00068e 9815
+00068f ef1f
+000690 bb10
+000691 0000
+000692 0000
+000693 0000                      	lcd_wait_busy
                                  
                                  	;epilogue
-000689 9621                      	adiw Y, 1
-00068a bfde                      	out SPH, YH
-00068b bfcd                      	out SPL, YL
-00068c 91df                      	pop YH
-00068d 91cf                      	pop YL
-00068e 911f                      	pop r17
-00068f 910f                      	pop r16
-000690 9508                      	ret
+000694 9621                      	adiw Y, 1
+000695 bfde                      	out SPH, YH
+000696 bfcd                      	out SPL, YL
+000697 91df                      	pop YH
+000698 91cf                      	pop YL
+000699 911f                      	pop r17
+00069a 910f                      	pop r16
+00069b 9508                      	ret
                                  
                                  ; expects digit in r19, ASCII '0' in r23
                                  ;.macro display_digit
@@ -4131,149 +4161,289 @@ C:\Users\nsoo1\OneDrive\Documents\UniDocuments\COMP9032\Project\Project\main.asm
                                  ; conflict registers: 23, 25, 26, 27, 19
                                  decimal_conversion:
                                  ;prologue
-000691 933f                      	push r19
-000692 937f                      	push r23
-000693 938f                      	push r24
-000694 939f                      	push r25
-000695 93af                      	push r26
-000696 93bf                      	push r27
-000697 93cf                      	push YL
-000698 93df                      	push YH
-000699 b7cd                      	in YL, SPL
-00069a b7de                      	in YH, SPH
-00069b 9721                      	sbiw Y, 1
+00069c 933f                      	push r19
+00069d 937f                      	push r23
+00069e 938f                      	push r24
+00069f 939f                      	push r25
+0006a0 93af                      	push r26
+0006a1 93bf                      	push r27
+0006a2 93cf                      	push YL
+0006a3 93df                      	push YH
+0006a4 b7cd                      	in YL, SPL
+0006a5 b7de                      	in YH, SPH
+0006a6 9721                      	sbiw Y, 1
                                  
-00069c e370                      	ldi r23, '0'				; load ASCII '0'
-00069d 2fa8                      	mov r26, r24				; Load result (y) r24 into register r26.
+0006a7 e370                      	ldi r23, '0'				; load ASCII '0'
+0006a8 2fa8                      	mov r26, r24				; Load result (y) r24 into register r26.
                                  
-00069e e694                      	ldi r25, 100				; Load 100 for division
-00069f 27bb
-0006a0 17a9
-0006a1 f018
-0006a2 1ba9
-0006a3 95b3
-0006a4 cffb
-0006a5 0000                          divide				; Call divide subroutine
-0006a6 2f3b                      	mov r19, r27				; Get the quotient (hundreds digit) in r19
-0006a7 3030                          cpi r19, 0					; Check if it's zero
-0006a8 f409                      	brne from_hundreds
-0006a9 c00e                      	rjmp no_hundreds
+0006a9 e694                      	ldi r25, 100				; Load 100 for division
+0006aa 27bb
+0006ab 17a9
+0006ac f018
+0006ad 1ba9
+0006ae 95b3
+0006af cffb
+0006b0 0000                          divide				; Call divide subroutine
+0006b1 2f3b                      	mov r19, r27				; Get the quotient (hundreds digit) in r19
+0006b2 3030                          cpi r19, 0					; Check if it's zero
+0006b3 f409                      	brne from_hundreds
+0006b4 c00e                      	rjmp no_hundreds
                                  
                                  from_hundreds:
-0006aa 0f37
-0006ab dfb3                      	display_digit
-0006ac e09a                      	ldi r25, 10					; Load 10 for division
-0006ad 27bb
-0006ae 17a9
-0006af f018
-0006b0 1ba9
-0006b1 95b3
-0006b2 cffb
-0006b3 0000                          divide				; Call divide subroutine
-0006b4 2f3b                      	mov r19, r27				; move quotient to r19
 0006b5 0f37
-0006b6 dfa8                      	display_digit				; always display tens if from hundreds
-0006b7 c00e                      	rjmp display_ones_digit
+0006b6 dfb3                      	display_digit
+0006b7 e09a                      	ldi r25, 10					; Load 10 for division
+0006b8 27bb
+0006b9 17a9
+0006ba f018
+0006bb 1ba9
+0006bc 95b3
+0006bd cffb
+0006be 0000                          divide				; Call divide subroutine
+0006bf 2f3b                      	mov r19, r27				; move quotient to r19
+0006c0 0f37
+0006c1 dfa8                      	display_digit				; always display tens if from hundreds
+0006c2 c00e                      	rjmp display_ones_digit
                                  
                                  no_hundreds:
-0006b8 e09a                      	ldi r25, 10					; Load 10 for division
-0006b9 27bb
-0006ba 17a9
-0006bb f018
-0006bc 1ba9
-0006bd 95b3
-0006be cffb
-0006bf 0000                          divide				; Call divide subroutine
-0006c0 30b0                      	cpi r27, 0                ; Check if it's zero
-0006c1 f021                      	breq display_ones_digit
-0006c2 2f3b                      	mov r19, r27
-0006c3 0f37
-0006c4 df9a                      	display_digit
-0006c5 c000                      	rjmp display_ones_digit
+0006c3 e09a                      	ldi r25, 10					; Load 10 for division
+0006c4 27bb
+0006c5 17a9
+0006c6 f018
+0006c7 1ba9
+0006c8 95b3
+0006c9 cffb
+0006ca 0000                          divide				; Call divide subroutine
+0006cb 30b0                      	cpi r27, 0                ; Check if it's zero
+0006cc f021                      	breq display_ones_digit
+0006cd 2f3b                      	mov r19, r27
+0006ce 0f37
+0006cf df9a                      	display_digit
+0006d0 c000                      	rjmp display_ones_digit
                                  
                                  display_ones_digit:
-0006c6 2f3a                      	mov r19, r26
-0006c7 0f37
-0006c8 df96                      	display_digit
+0006d1 2f3a                      	mov r19, r26
+0006d2 0f37
+0006d3 df96                      	display_digit
                                  
                                  	;epilogue
-0006c9 9621                      	adiw Y, 1
-0006ca bfde                          out SPH, YH
-0006cb bfcd                          out SPL, YL
-0006cc 91df                          pop YH
-0006cd 91cf                          pop YL
-0006ce 91bf                          pop r27
-0006cf 91af                          pop r26
-0006d0 919f                          pop r25
-0006d1 918f                      	pop r24
-0006d2 917f                          pop r23
-0006d3 913f                          pop r19
-0006d4 9508                          ret
+0006d4 9621                      	adiw Y, 1
+0006d5 bfde                          out SPH, YH
+0006d6 bfcd                          out SPL, YL
+0006d7 91df                          pop YH
+0006d8 91cf                          pop YL
+0006d9 91bf                          pop r27
+0006da 91af                          pop r26
+0006db 919f                          pop r25
+0006dc 918f                      	pop r24
+0006dd 917f                          pop r23
+0006de 913f                          pop r19
+0006df 9508                          ret
+                                 
+                                 ; Interrupt Service Routine for Timer 0 overflow
+                                 timer0ovf:
+0006e0 930f                      	push w
+0006e1 b70f                      	in w, SREG
+0006e2 930f                      	push w
+0006e3 93df                      	push YH
+0006e4 93cf                      	push YL
+0006e5 939f                      	push r25
+0006e6 938f                      	push r24						
+0006e7 933f                      	push r19						; Prologue ends
+0006e8 e0c3                      	ldi  YL, low(TempCounter) 
+0006e9 e0d2                      	ldi  YH, high(TempCounter)		; Y pointer points to temp counter
+0006ea 9189                      	ld   r24, Y+					; Load the value of the temporary counter.
+0006eb 8198                      	ld   r25, Y
+0006ec 9601                      	adiw r25:r24, 1					; Increase the temporary counter by one.
+0006ed 3e88                      	cpi  r24, low(1000)			; Check if (r25:r24)=1000
+0006ee f541                      	brne not_second
+0006ef 3093                      	cpi  r25, high(1000)
+0006f0 f531                      	brne not_second
+0006f1 e0c3
+0006f2 e0d2
+0006f3 2700
+0006f4 9309
+0006f5 8308                      	clear_word TempCounter
+0006f6 e0c5                      	ldi  YL, low(SecondCounter)		; Load the address of the second counter.
+0006f7 e0d2                      	ldi  YH, high(SecondCounter)		
+0006f8 9189                      	ld   r24, Y+					; Load the value of the second counter.
+0006f9 8198                      	ld   r25, Y
+0006fa 9601                      	adiw r25:r24, 1					; Increase the second counter by one.
+0006fb 8398                      	st   Y, r25						; Store the value of the second counter.
+0006fc 938a                      	st   -Y, r24
+0006fd 2f38                      	mov  r19, r24					; Save value of second counter
+0006fe e0d2                      	ldi  YH, high(BeepState)
+0006ff e0c7                      	ldi  YL, low(BeepState)
+000700 8188                      	ld	 r24, Y
+000701 3081                      	cpi  r24, 1
+000702 f011                      	breq do_beep_beep
+000703 3082                      	cpi  r24, 2
+000704 f051                      	breq do_bee_eep
+                                 do_beep_beep:
+000705 e0d2                      	ldi YH, high(BeepSeconds)
+000706 e0c8                      	ldi YL, low(BeepSeconds)
+000707 8108                      	ld  w, Y
+000708 1730                      	cp  r19, w
+000709 f059                      	breq end_beep_beep
+00070a e008                      	ldi w, 0b00001000				; Toggle motor on/off
+00070b 2740                      	eor motor_state, w
+00070c 9340 010a                 	sts DDRL, motor_state
+00070e c00a                      	rjmp endif
+                                 do_bee_eep:
+00070f e0d2                      	ldi YH, high(BeepSeconds)
+000710 e0c8                      	ldi YL, low(BeepSeconds)
+000711 8108                      	ld  w, Y
+000712 1730                      	cp  r19, w
+000713 f009                      	breq end_beep_beep
+000714 c004                      	rjmp endif
+                                 end_beep_beep:
+000715 d036                      	rcall init_beeps
+000716 c002                      	rjmp endif
+                                 not_second:
+000717 8398                      	st   Y, r25
+000718 938a                      	st  -Y, r24
+                                 endif:
+000719 913f                      	pop  r19
+00071a 918f                      	pop  r24
+00071b 919f                      	pop  r25
+00071c 91cf                      	pop  YL
+00071d 91df                      	pop  YH
+00071e 910f                      	pop  w
+00071f bf0f                      	out  SREG, w
+000720 910f                      	pop  w
+000721 9518                      	reti
+                                 
+                                 ; Play beep_beep tone for 10 seconds
+                                 beep_beep:
+000722 93df                      	push YH
+000723 93cf                      	push YL
+000724 930f                      	push w
+000725 e0d2                      	ldi  YH, high(BeepState)
+000726 e0c7                      	ldi  YL, low(BeepState)
+000727 e001                      	ldi  w, 1                       ; Store 1 for beep beep mode
+000728 8308                      	st   Y, w
+000729 e0d2                      	ldi  YH, high(BeepSeconds)
+00072a e0c8                      	ldi  YL, low(BeepSeconds)
+00072b e00a                      	ldi  w, 10                      ; Number of seconds to beep for
+00072c 8308                      	st   Y, w
+00072d e001                      	ldi  w, 1<<TOIE0				; Enable timer 0 overflow interrupt
+00072e 9300 006e                 	sts  TIMSK0, w
+000730 e008                      	ldi  w, 0b00001000
+000731 9300 010a                 	sts  DDRL, w					; Bit 3 will function as OC5A. (Motor on)
+000733 910f                      	pop  w
+000734 91cf                      	pop  YL
+000735 91df                      	pop  YH
+000736 9508                      	ret
+                                 
+                                 ; Play bee_eep tone for 3 seconds
+                                 bee_eep:
+000737 93df                      	push YH
+000738 93cf                      	push YL
+000739 930f                      	push w
+00073a e0d2                      	ldi  YH, high(BeepState)
+00073b e0c7                      	ldi  YL, low(BeepState)
+00073c e002                      	ldi  w, 2                       ; Store 2 for bee_eep mode
+00073d 8308                      	st   Y, w
+00073e e0d2                      	ldi  YH, high(BeepSeconds)
+00073f e0c8                      	ldi  YL, low(BeepSeconds)
+000740 e003                      	ldi  w, 3                       ; Number of seconds to beep for
+000741 8308                      	st   Y, w
+000742 e001                      	ldi  w, 1<<TOIE0				; Enable timer 0 overflow interrupt
+000743 9300 006e                 	sts  TIMSK0, w
+000745 e008                      	ldi  w, 0b00001000
+000746 9300 010a                 	sts  DDRL, w					; Bit 3 will function as OC5A. (Motor on)
+000748 910f                      	pop  w
+000749 91cf                      	pop  YL
+00074a 91df                      	pop  YH
+00074b 9508                      	ret
+                                 
+                                 init_beeps:
+00074c 93df                      	push YH
+00074d 93cf                      	push YL
+00074e 930f                      	push w
+00074f 2700                      	clr  w							; Disable timer 0 overflow interrupt
+000750 9300 006e                 	sts  TIMSK0, w
+000752 e0d2                      	ldi  YH, high(BeepState)
+000753 e0c7                      	ldi  YL, low(BeepState)
+000754 2700                      	clr  w
+000755 8308                      	st   Y, w						; Set beep state to 0
+000756 e0c3
+000757 e0d2
+000758 2700
+000759 9309
+00075a 8308                      	clear_word TempCounter
+00075b 2700                      	clr  w							; Motor off
+00075c 9300 010a                 	sts  DDRL, w
+00075e 2744                      	clr  motor_state
+00075f 910f                      	pop  w
+000760 91cf                      	pop  YL
+000761 91df                      	pop  YH
+000762 9508                      	ret
                                  
                                  ; display the front patient in data memory to LCD display mode
                                  display_front_patient:
-0006d5 93cf                      	push YL
-0006d6 93df                      	push YH
-0006d7 93ef                      	push ZL
-0006d8 93ff                      	push ZH
-0006d9 930f                      	push r16
-0006da 933f                      	push r19
-0006db 939f                      	push r25
-0006dc 938f                      	push r24
+000763 93cf                      	push YL
+000764 93df                      	push YH
+000765 93ef                      	push ZL
+000766 93ff                      	push ZH
+000767 930f                      	push r16
+000768 933f                      	push r19
+000769 939f                      	push r25
+00076a 938f                      	push r24
                                  
-0006dd e0f2                      	ldi ZH, high(first_patient)		; load memory addr
-0006de e0ec                      	ldi ZL, low(first_patient)
-0006df 9181                      	ld	r24, Z+
-0006e0 8190                      	ld  r25, Z
-0006e1 01ec                      	movw Y, r24
-0006e2 9139                      	ld  r19, Y+ 					; load lower byte of pID into r19
-0006e3 ddbb                      	rcall DISPLAY_NUMBER_RIGHT		; display bottom righ aligned pID
-0006e4 dd83                      	rcall DISPLAY_BOTTOM_LEFT		; move cursor to bottom left
-0006e5 9621                      	adiw Y, 1						; skip over higher byte of pID
+00076b e0f2                      	ldi ZH, high(first_patient)		; load memory addr
+00076c e1e6                      	ldi ZL, low(first_patient)
+00076d 9181                      	ld	r24, Z+
+00076e 8190                      	ld  r25, Z
+00076f 01ec                      	movw Y, r24
+000770 9139                      	ld  r19, Y+ 					; load lower byte of pID into r19
+000771 dd38                      	rcall DISPLAY_NUMBER_RIGHT		; display bottom righ aligned pID
+000772 dd00                      	rcall DISPLAY_BOTTOM_LEFT		; move cursor to bottom left
+000773 9621                      	adiw Y, 1						; skip over higher byte of pID
                                  	; loop over reamining 8 bytes of chars
-0006e6 e008                      	ldi r16, 8
+000774 e008                      	ldi r16, 8
                                  display_loop:
-0006e7 9139                      	ld r19, Y+
-0006e8 3030                      	cpi r19, 0
-0006e9 f021                      	breq end_display
-0006ea df74                      	rcall write
-0006eb 950a                      	dec r16
-0006ec 3000                      	cpi r16, 0
-0006ed f7c9                      	brne display_loop
+000775 9139                      	ld r19, Y+
+000776 3030                      	cpi r19, 0
+000777 f021                      	breq end_display
+000778 def1                      	rcall write
+000779 950a                      	dec r16
+00077a 3000                      	cpi r16, 0
+00077b f7c9                      	brne display_loop
                                  end_display:
                                  	;epilogue
-0006ee 918f                      	pop r24
-0006ef 919f                      	pop r25
-0006f0 913f                      	pop r19
-0006f1 910f                      	pop r16
-0006f2 91ff                      	pop ZH
-0006f3 91ef                      	pop ZL
-0006f4 91df                      	pop YH
-0006f5 91cf                      	pop YL
-0006f6 9508                      	ret
+00077c 918f                      	pop r24
+00077d 919f                      	pop r25
+00077e 913f                      	pop r19
+00077f 910f                      	pop r16
+000780 91ff                      	pop ZH
+000781 91ef                      	pop ZL
+000782 91df                      	pop YH
+000783 91cf                      	pop YL
+000784 9508                      	ret
                                  
                                  value_lookup:
-0006f7 0201
-0006f8 4103
-0006f9 0504
-0006fa 4206
-0006fb 0807
-0006fc 4309
-0006fd 002a
-0006fe 4423                      	.db		1, 2, 3, 0x41, 4, 5, 6, 0x42, 7, 8, 9, 0x43, 0x2A, 0, 0x23, 0x44
+000785 0201
+000786 4103
+000787 0504
+000788 4206
+000789 0807
+00078a 4309
+00078b 002a
+00078c 4423                      	.db		1, 2, 3, 0x41, 4, 5, 6, 0x42, 7, 8, 9, 0x43, 0x2A, 0, 0x23, 0x44
                                  ascii_lookup:
-0006ff 6261
-000700 6463
-000701 6665
-000702 6867
-000703 6a69
-000704 6c6b
-000705 6e6d
-000706 706f
-000707 7372
-000708 7574
-000709 7776
-00070a 7978
+00078d 6261
+00078e 6463
+00078f 6665
+000790 6867
+000791 6a69
+000792 6c6b
+000793 6e6d
+000794 706f
+000795 7372
+000796 7574
+000797 7776
+000798 7978
 
 
 RESOURCE USE INFORMATION
@@ -4291,41 +4461,41 @@ counted separately from r26..r31 here.
 .dseg memory usage only counts static data declared with .byte
 
 "ATmega2560" register use summary:
-x  :   0 y  :  62 z  :  30 r0 :   0 r1 :   0 r2 :  12 r3 :  20 r4 :  18 
+x  :   0 y  :  82 z  :  30 r0 :   0 r1 :   0 r2 :  12 r3 :  20 r4 :  18 
 r5 :  54 r6 :  10 r7 :  18 r8 :   8 r9 :   0 r10:   8 r11:   9 r12:   3 
-r13:   0 r14:   0 r15:   0 r16: 224 r17: 157 r18:  52 r19:  93 r20:   0 
-r21:   0 r22:   0 r23:   7 r24:  35 r25:  24 r26:  44 r27:  34 r28:  55 
-r29:  55 r30:  51 r31:  51 
-Registers used: 25 out of 35 (71.4%)
+r13:   0 r14:   0 r15:   0 r16: 282 r17: 157 r18:  53 r19:  98 r20:   3 
+r21:   0 r22:   0 r23:   7 r24:  48 r25:  33 r26:  44 r27:  34 r28:  75 
+r29:  75 r30:  47 r31:  47 
+Registers used: 26 out of 35 (74.3%)
 
 "ATmega2560" instruction use summary:
-.lds  :   0 .sts  :   0 adc   :   5 add   :  12 adiw  :  17 and   :   3 
+.lds  :   0 .sts  :   0 adc   :   5 add   :  12 adiw  :  19 and   :   3 
 andi  :  10 asr   :   0 bclr  :   0 bld   :   0 brbc  :   0 brbs  :   0 
-brcc  :   0 brcs  :   0 break :   0 breq  :  11 brge  :   0 brhc  :   0 
+brcc  :   0 brcs  :   0 break :   0 breq  :  15 brge  :   0 brhc  :   0 
 brhs  :   0 brid  :   0 brie  :   0 brlo  :   4 brlt  :   1 brmi  :   0 
 brne  :  40 brpl  :   0 brsh  :   4 brtc  :   0 brts  :   0 brvc  :   0 
 brvs  :   0 bset  :   0 bst   :   0 call  :   0 cbi   : 121 cbr   :   0 
-clc   :   0 clh   :   0 cli   :   0 cln   :   0 clr   :  49 cls   :   0 
-clt   :   0 clv   :   0 clz   :   0 com   :   0 cp    :  26 cpc   :   0 
-cpi   :  21 cpse  :   0 dec   :  13 eicall:   0 eijmp :   0 elpm  :   0 
-eor   :   0 fmul  :   0 fmuls :   0 fmulsu:   0 icall :   0 ijmp  :   0 
-in    :  47 inc   :  16 jmp   :   4 ld    :  25 ldd   :   0 ldi   : 195 
-lds   :   7 lpm   :   4 lsl   :   3 lsr   :   2 mov   :  39 movw  :   6 
-mul   :   0 muls  :   0 mulsu :   0 neg   :   0 nop   : 303 or    :   0 
-ori   :  10 out   :  87 pop   : 124 push  : 124 rcall :  81 ret   :  16 
-reti  :   4 rjmp  :  43 rol   :   0 ror   :   0 sbc   :   0 sbci  :   6 
+clc   :   0 clh   :   0 cli   :   0 cln   :   0 clr   :  57 cls   :   0 
+clt   :   0 clv   :   0 clz   :   0 com   :   0 cp    :  28 cpc   :   0 
+cpi   :  25 cpse  :   0 dec   :  13 eicall:   0 eijmp :   0 elpm  :   0 
+eor   :   1 fmul  :   0 fmuls :   0 fmulsu:   0 icall :   0 ijmp  :   0 
+in    :  48 inc   :  16 jmp   :   5 ld    :  32 ldd   :   0 ldi   : 228 
+lds   :   7 lpm   :   4 lsl   :   3 lsr   :   2 mov   :  40 movw  :   6 
+mul   :   0 muls  :   0 mulsu :   0 neg   :   0 nop   : 301 or    :   0 
+ori   :  10 out   :  91 pop   : 140 push  : 140 rcall :  87 ret   :  19 
+reti  :   5 rjmp  :  46 rol   :   0 ror   :   0 sbc   :   0 sbci  :   4 
 sbi   :  53 sbic  :   0 sbis  :   0 sbiw  :  10 sbr   :   1 sbrc  :  16 
-sbrs  :   0 sec   :   0 seh   :   0 sei   :   1 sen   :   0 ser   :  17 
+sbrs  :   0 sec   :   0 seh   :   0 sei   :   2 sen   :   0 ser   :  17 
 ses   :   0 set   :   0 sev   :   0 sez   :   0 sleep :   0 spm   :   0 
-st    :  40 std   :   0 sts   :  31 sub   :   3 subi  :   6 swap  :   0 
+st    :  53 std   :   0 sts   :  42 sub   :   3 subi  :   4 swap  :   0 
 tst   :   0 wdr   :   0 
-Instructions used: 46 out of 116 (39.7%)
+Instructions used: 47 out of 116 (40.5%)
 
 "ATmega2560" memory use summary [bytes]:
 Segment   Begin    End      Code   Data   Used    Size   Use%
 ---------------------------------------------------------------
-[.cseg] 0x000000 0x000e18   3402     42   3444  262144   1.3%
-[.dseg] 0x000200 0x000214      0     20     20    8192   0.2%
+[.cseg] 0x000000 0x000f34   3690     42   3732  262144   1.4%
+[.dseg] 0x000200 0x00021a      0     26     26    8192   0.3%
 [.eseg] 0x000000 0x000000      0      0      0    4096   0.0%
 
 Assembly complete, 0 errors, 0 warnings

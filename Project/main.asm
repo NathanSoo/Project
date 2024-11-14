@@ -55,20 +55,28 @@
 .def arg0					= r10
 .def arg1					= r11
 .def arg2					= r12
+.def motor_state			= r20 ; Stores state of motor (on/off)
 
 .dseg								; Start the data segment
 .org 0x0200							; from address 0x0200
+
+pb0_state:					.byte 1
+pb1_state:					.byte 1
+which_pb:					.byte 1
+TempCounter:				.byte 2 ; Temporary counter used to determine if 1 second has passed
+SecondCounter:				.byte 1 ; Counter to store seconds
+BeepCounter:				.byte 1 ; Counter for keeping track of times beeped
+BeepState:					.byte 1 ; Maintains state for beep routines
+BeepSeconds:				.byte 1 ; Stores number of seconds for motor to beep
+is_keypad_timeout:			.byte 1
 
 new_name:					.byte max_name            ; Queue functions assume 8 bytes for name
 num_patients:				.byte 2
 init_pid:					.byte 2                                  
 first_patient:				.byte 2                 
 last_patient:				.byte 2  ; Reserve space for Queue variables in data memory
-is_keypad_timeout:			.byte 1
 
-pb0_state:					.byte 1
-pb1_state:					.byte 1
-which_pb:					.byte 1
+
 
 
 .cseg
@@ -78,11 +86,22 @@ which_pb:					.byte 1
 	jmp		pb0_ih
 	jmp		pb1_ih
 
+.org OVF0addr
+	jmp		timer0ovf
 .org OVF3addr
 	jmp		keypad_timeout
 .org OVF4addr
 	jmp		pb_timeout
 
+; The macro clears a word (2 bytes) in data memory for the counter
+; The parameter @0 is the memory address for that word
+.macro clear_word
+	ldi YL, low(@0)  ; load the memory address to Y
+	ldi YH, high(@0)
+	clr w
+	st Y+, w		; clear the two bytes at @0 in SRAM
+	st Y, w
+.endmacro
 
 ; expects digit in r19, ASCII '0' in r23
 .macro display_digit
@@ -272,6 +291,23 @@ loop2:
 ;______________________________________________________________________
 reset:
 	init_queue
+	rcall init_beeps
+	; Set Timer 0 to count seconds
+	clr w
+	out TCCR0A, w				    ; Set Timer 0 to Normal Mode
+	ldi w, 0b00000011
+	out TCCR0B, w					; Prescaler value = 64	
+	sei								; Enable global interrupt
+	; Set Timer 5 for waveform generation
+	clr w						; the value controls the PWM duty cycle
+	sts OCR5AH, w				; Set higher byte of OCR5A to 0
+	ldi w, 0x4A        
+	sts OCR5AL, w				; Set lower byte to 0x4A
+	; Set Timer5 to Phase Correct PWM mode.
+	ldi w, 0b00001001			; Set Timer clock frequency (no prescaling)
+	sts TCCR5B, w      
+	ldi w, (1<< WGM50)|(1<<COM5A1) ; Phase correct PWM mode
+	sts TCCR5A, w
 	rcall	INITIALISE_LCD
 	rcall	LCD_DISPLAY_MODE
 	rcall	clear_name
@@ -904,7 +940,7 @@ pb0_ih:
 
 	in		r17, sreg
 
-	debounce
+	;debounce
 
 	clr		zero
 
@@ -919,6 +955,8 @@ pb0_state0:
 	brne	pb0_state1
 
 	; call next patient
+	rcall init_beeps
+	rcall beep_beep
 
 	; enable push button 1 (cancel appointment)
 	ldi		zh, high(pb1_state)
@@ -1018,7 +1056,7 @@ pb1_ih:
 
 	in		r17, sreg
 
-	debounce
+	;debounce
 
 	clr		zero
 
@@ -1073,7 +1111,8 @@ pb1_state1:
 	; return push button state to 0
 	st		z, zero
 pb1_state_end:
-
+	
+	out		PORTB, r18
 	out		sreg, r17
 
 	pop		zero
@@ -1113,7 +1152,8 @@ timeout_pb1:
 	brne	end_timeout_sel
 
 	; play cancel stuff
-
+	rcall init_beeps
+	rcall bee_eep
 end_timeout_sel:
 
 	; pop patient from queue
@@ -1681,6 +1721,138 @@ display_ones_digit:
     pop r23
     pop r19
     ret
+
+; Interrupt Service Routine for Timer 0 overflow
+timer0ovf:
+	push w
+	in w, SREG
+	push w
+	push YH
+	push YL
+	push r25
+	push r24						
+	push r19						; Prologue ends
+	ldi  YL, low(TempCounter) 
+	ldi  YH, high(TempCounter)		; Y pointer points to temp counter
+	ld   r24, Y+					; Load the value of the temporary counter.
+	ld   r25, Y
+	adiw r25:r24, 1					; Increase the temporary counter by one.
+	cpi  r24, low(1000)			; Check if (r25:r24)=1000
+	brne not_second
+	cpi  r25, high(1000)
+	brne not_second
+	clear_word TempCounter
+	ldi  YL, low(SecondCounter)		; Load the address of the second counter.
+	ldi  YH, high(SecondCounter)		
+	ld   r24, Y+					; Load the value of the second counter.
+	ld   r25, Y
+	adiw r25:r24, 1					; Increase the second counter by one.
+	st   Y, r25						; Store the value of the second counter.
+	st   -Y, r24
+	mov  r19, r24					; Save value of second counter
+	ldi  YH, high(BeepState)
+	ldi  YL, low(BeepState)
+	ld	 r24, Y
+	cpi  r24, 1
+	breq do_beep_beep
+	cpi  r24, 2
+	breq do_bee_eep
+do_beep_beep:
+	ldi YH, high(BeepSeconds)
+	ldi YL, low(BeepSeconds)
+	ld  w, Y
+	cp  r19, w
+	breq end_beep_beep
+	ldi w, 0b00001000				; Toggle motor on/off
+	eor motor_state, w
+	sts DDRL, motor_state
+	rjmp endif
+do_bee_eep:
+	ldi YH, high(BeepSeconds)
+	ldi YL, low(BeepSeconds)
+	ld  w, Y
+	cp  r19, w
+	breq end_beep_beep
+	rjmp endif
+end_beep_beep:
+	rcall init_beeps
+	rjmp endif
+not_second:
+	st   Y, r25
+	st  -Y, r24
+endif:
+	pop  r19
+	pop  r24
+	pop  r25
+	pop  YL
+	pop  YH
+	pop  w
+	out  SREG, w
+	pop  w
+	reti
+
+; Play beep_beep tone for 10 seconds
+beep_beep:
+	push YH
+	push YL
+	push w
+	ldi  YH, high(BeepState)
+	ldi  YL, low(BeepState)
+	ldi  w, 1                       ; Store 1 for beep beep mode
+	st   Y, w
+	ldi  YH, high(BeepSeconds)
+	ldi  YL, low(BeepSeconds)
+	ldi  w, 10                      ; Number of seconds to beep for
+	st   Y, w
+	ldi  w, 1<<TOIE0				; Enable timer 0 overflow interrupt
+	sts  TIMSK0, w
+	ldi  w, 0b00001000
+	sts  DDRL, w					; Bit 3 will function as OC5A. (Motor on)
+	pop  w
+	pop  YL
+	pop  YH
+	ret
+
+; Play bee_eep tone for 3 seconds
+bee_eep:
+	push YH
+	push YL
+	push w
+	ldi  YH, high(BeepState)
+	ldi  YL, low(BeepState)
+	ldi  w, 2                       ; Store 2 for bee_eep mode
+	st   Y, w
+	ldi  YH, high(BeepSeconds)
+	ldi  YL, low(BeepSeconds)
+	ldi  w, 3                       ; Number of seconds to beep for
+	st   Y, w
+	ldi  w, 1<<TOIE0				; Enable timer 0 overflow interrupt
+	sts  TIMSK0, w
+	ldi  w, 0b00001000
+	sts  DDRL, w					; Bit 3 will function as OC5A. (Motor on)
+	pop  w
+	pop  YL
+	pop  YH
+	ret
+
+init_beeps:
+	push YH
+	push YL
+	push w
+	clr  w							; Disable timer 0 overflow interrupt
+	sts  TIMSK0, w
+	ldi  YH, high(BeepState)
+	ldi  YL, low(BeepState)
+	clr  w
+	st   Y, w						; Set beep state to 0
+	clear_word TempCounter
+	clr  w							; Motor off
+	sts  DDRL, w
+	clr  motor_state
+	pop  w
+	pop  YL
+	pop  YH
+	ret
 
 ; display the front patient in data memory to LCD display mode
 display_front_patient:
