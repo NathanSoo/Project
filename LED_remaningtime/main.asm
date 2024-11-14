@@ -37,8 +37,8 @@ jmp RESET
 jmp DEFAULT      
 jmp DEFAULT       
 ;…   
-.org OVF0addr
- jmp Timer0OVF          
+.org OVF2addr
+ jmp Timer2OVF          
 ;…   
 jmp DEFAULT       
 DEFAULT:  reti        
@@ -65,7 +65,7 @@ PatternsE:
  
  rjmp main
 
-  Timer0OVF:   ; interrupt subroutine for Timer0
+  Timer2OVF:   ; interrupt subroutine for Timer0
                push temp           ; Prologue starts.
                in temp, SREG
                push temp           ; Prologue starts.
@@ -119,11 +119,11 @@ end_leds:
 			   cpi r24, 10
 			   brne store_second
 			   clr r24
-			   sts TCCR1A, r24
-			   sts TCCR1B, r24
-			   sts TCNT1h, r24
-			   sts TCNT1l, r24
-			   sts TIMSK1, r24
+			   sts TCCR2A, r24
+			   sts TCCR2B, r24
+;			   sts TCNT0h, r24
+;			   sts TCNT0l, r24
+			   sts TIMSK2, r24
 store_second:
 			   st Y, r25                ; Store the value of the second counter.
                st -Y, r24 
@@ -148,11 +148,11 @@ out PORTG, leds
  Clear TempCounter                
 Clear SecondCounter             
 ldi temp, 0b00000000
- sts TCCR1A, temp
+ sts TCCR2A, temp
  ldi temp, 0b00000011
- sts TCCR1B, temp                    
+ sts TCCR2B, temp                    
 ldi temp,  1<<TOIE0                
-sts TIMSK1, temp                  
+sts TIMSK2, temp                  
 sei                                                 
 loop:  
 rjmp loop
