@@ -29,7 +29,7 @@ st Y, temp
 
  SecondCounterLED:
  .byte 2                   
-TempcounterLEDLED: 
+TempcounterLED: 
 .byte 2                   
 .cseg
  .org 0x0000 
