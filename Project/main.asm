@@ -59,8 +59,7 @@
 .dseg								; Start the data segment
 .org 0x0200							; from address 0x0200
 
-new_name:					.byte max_name
-temp_name:					.byte 8            ; Queue functions assume 8 bytes for name
+new_name:					.byte max_name            ; Queue functions assume 8 bytes for name
 num_patients:				.byte 2
 init_pid:					.byte 2                                  
 first_patient:				.byte 2                 
@@ -69,15 +68,15 @@ is_keypad_timeout:			.byte 1
 
 pb0_state:					.byte 1
 pb1_state:					.byte 1
-which_pb					.byte 1
+which_pb:					.byte 1
 
 
 .cseg
 .org 0x0000
 	rjmp	reset
 	nop
-	jmp		pb1
-	jmp		pb2
+	jmp		pb0_ih
+	jmp		pb1_ih
 
 .org OVF3addr
 	jmp		keypad_timeout
@@ -119,12 +118,12 @@ debounce_loop:
 	brne debounce_loop
 .endmacro
 
-; Reads name from temp_name variable in data memory,
+; Reads name from new_name variable in data memory,
 ; stores it in newest patient struct on queue.
 ; Assumes address of patient_name stored in Y.
 .macro read_name
-	ldi ZH, high(temp_name)
-	ldi ZL, low(temp_name)
+	ldi ZH, high(new_name)
+	ldi ZL, low(new_name)
 	ldi r26, 8
 read_loop:
 	ld  r27, Z+
@@ -275,6 +274,7 @@ reset:
 	init_queue
 	rcall	INITIALISE_LCD
 	rcall	LCD_DISPLAY_MODE
+	rcall	clear_name
 
 	clr		zero
 
@@ -313,8 +313,6 @@ reset:
 	ldi		zh, high(is_keypad_timeout)
 	ldi		zl, low(is_keypad_timeout)
 	st		z, zero
-	;ldi		w, (1 << TOIE1)
-	;sts		TIMSK1, w
 
 	sei
 
@@ -414,6 +412,31 @@ not_clear:
 	rcall	enqueue
 	rcall	LCD_DISPLAY_MODE
 
+	; if its the first patient then push to display and enable pb0
+	ldi		zh, high(num_patients)
+	ldi		zl, low(num_patients)
+	ld		w, z
+	cpi		w, 1
+	brne	not_first_patient
+
+	; enable pb0 and reset pb0 state
+	ldi		zh, high(pb0_state)
+	ldi		zl, low(pb0_state)
+	ldi		w, 0
+	st		z, w
+
+	lds		w, EICRA
+	andi	w, 0b11111100
+	ori		w, (0b10 << ISC00)
+	sts		EICRA, w
+
+	in		w, EIMSK
+	ori		w, (1 << INT0)
+	out		EIMSK, w
+
+not_first_patient:
+	rcall	display_front_patient
+
 	clr		is_timer_active					; keypad_timer_stop()
 	ldi		w, high(new_name)				; initialise_array(new_name, 8)
 	mov		arg0, w
@@ -431,7 +454,6 @@ not_clear:
 	mov		last_key_pressed, w
 	clr		times_key_pressed				; times_key_pressed = 0
 	clr		entry_mode						; entry_mode = false
-	rcall   LCD_DISPLAY_MODE				; Set LCD to display mode
 	rjmp	end_process_key
 
 not_enter:
@@ -542,7 +564,8 @@ end_process_key:
 	sts		TIMSK3, w
 timer_not_active:
 
-	out		PORTB, is_timer_active
+	in		w, EIMSK
+	out		PORTB, w
 
 	rjmp	loop
 
@@ -566,7 +589,7 @@ initialise_array:
 
 	mov		r17, arg2
 
-	rcall	INITIALISE_LCD
+	;rcall	INITIALISE_LCD
 
 initialise_array_loop:
 	cp		r17, zero
@@ -722,14 +745,14 @@ hold_loop:								; wait until button is unpressed before continuing to read key
 	pop		w
 	ret
 
-; Clears temp_name variable in memory
+; Clears new_name variable in memory
 clear_name:
 	push YL
 	push YH
 	push r16
 	push r17
-	ldi  YH, high(temp_name)
-	ldi  YL, low(temp_name)
+	ldi  YH, high(new_name)
+	ldi  YL, low(new_name)
 	ldi  r16, 8
 	ldi  r17, 0
 delete:
@@ -871,7 +894,7 @@ clear_pt_loop:
 ;	ori		w, (1 << INT1)
 ;	out		EIMSK, w
 
-pb0:
+pb0_ih:
 	push	zl
 	push	zh
 	push	w
@@ -890,6 +913,7 @@ pb0:
 
 	ld		r18, z
 
+
 pb0_state0:
 	cpi		r18, 0
 	brne	pb0_state1
@@ -906,12 +930,22 @@ pb0_state0:
 	ori		w, (0b10 << ISC10)
 	sts		EICRA, w
 
+	lds		w, EICRA
+	andi	w, 0b11111100
+	ori		w, (0b10 << ISC00)
+	
 	in		w, EIMSK
 	ori		w, (1 << INT1)
 	out		EIMSK, w
 
-	; change push button state to 2
-	inc		r18
+	in		w, EIMSK
+	ori		w, (1 << INT0)
+	out		EIMSK, w
+
+	; change push button state to 1
+	ldi		zh, high(pb0_state)
+	ldi		zl, low(pb0_state)
+	ldi		r18, 1
 	st		z, r18
 
 	rjmp	pb0_state_end
@@ -934,7 +968,7 @@ pb0_state1:
 	sts		EICRA, w
 	
 	; change push button state to 2
-	inc		r18
+	ldi		r18, 2
 	st		z, r18
 
 	; set timer functionality
@@ -962,6 +996,8 @@ pb0_state2:
 	st		z, r18
 pb0_state_end:
 
+	out		PORTB, r18
+
 	out		sreg, r17
 
 	pop		zero
@@ -972,7 +1008,7 @@ pb0_state_end:
 	pop		zl
 	reti
 
-pb1:
+pb1_ih:
 	push	zl
 	push	zh
 	push	w
@@ -1048,7 +1084,7 @@ pb1_state_end:
 	pop		zl
 	reti
 
-pb_timeout
+pb_timeout:
 	push	zl
 	push	zh
 	push	w
@@ -1068,19 +1104,32 @@ pb_timeout
 timeout_pb0:
 	cpi		r18, 0
 	brne	timeout_pb1
-
-	; pop patient from queue
+ 
+	; start led countdown
 
 	rjmp	end_timeout_sel
 timeout_pb1:
 	cpi		r18, 1
 	brne	end_timeout_sel
 
-	; 
+	; play cancel stuff
 
 end_timeout_sel:
 
-	; stop calling patient
+	; pop patient from queue
+	rcall	dequeue
+	rcall	LCD_DISPLAY_MODE
+	rcall	display_front_patient
+
+	ldi		zh, high(num_patients)
+	ldi		zl, low(num_patients)
+	ld		w, z
+	cpi		w, 0
+	brne	timeout_no_patients
+	in		w, EIMSK
+	andi	w, 0b11111110
+	out		EIMSK, w
+timeout_no_patients:
 
 	; remove pb1 interrupt
 	in		w, EIMSK
@@ -1632,6 +1681,48 @@ display_ones_digit:
     pop r23
     pop r19
     ret
+
+; display the front patient in data memory to LCD display mode
+display_front_patient:
+	push YL
+	push YH
+	push ZL
+	push ZH
+	push r16
+	push r19
+	push r25
+	push r24
+
+	ldi ZH, high(first_patient)		; load memory addr
+	ldi ZL, low(first_patient)
+	ld	r24, Z+
+	ld  r25, Z
+	movw Y, r24
+	ld  r19, Y+ 					; load lower byte of pID into r19
+	rcall DISPLAY_NUMBER_RIGHT		; display bottom righ aligned pID
+	rcall DISPLAY_BOTTOM_LEFT		; move cursor to bottom left
+	adiw Y, 1						; skip over higher byte of pID
+	; loop over reamining 8 bytes of chars
+	ldi r16, 8
+display_loop:
+	ld r19, Y+
+	cpi r19, 0
+	breq end_display
+	rcall write
+	dec r16
+	cpi r16, 0
+	brne display_loop
+end_display:
+	;epilogue
+	pop r24
+	pop r25
+	pop r19
+	pop r16
+	pop ZH
+	pop ZL
+	pop YH
+	pop YL
+	ret
 
 value_lookup:
 	.db		1, 2, 3, 0x41, 4, 5, 6, 0x42, 7, 8, 9, 0x43, 0x2A, 0, 0x23, 0x44
