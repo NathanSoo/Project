@@ -1,11 +1,15 @@
 P_SIZE = 10  ; Size of patient struct
+BeepState    ; Stores which beep sequence the motor should be running, if any
 
 // initialise
+initialise_queue()
+initialise_motor()
 initialise_lcd()
 initialise_keypad()
 initialise_buttons()
 initialise_other_pins()
 initialise_timer()
+
 
 entry_mode = false
 queue = new_queue()
@@ -83,6 +87,10 @@ function keypad_to_ascii(last_key_pressed, times_key_pressed)
 ;----------------------
 ; Queue functions
 ;----------------------
+function initialise_queue():
+    num_patients = 0
+    first_patient = last_patient = 0
+
 function get_queue_len()
     return num_patients
 
@@ -112,10 +120,43 @@ function dequeue()
 ;----------------------
 ; Motor functions
 ;----------------------
+; Restore motor to off state and clear variables
+; Used for both initialising and ending a beep sequence
+function init_beeps():
+    disable_timer0ovf
+    BeepState = 0
+    motor_off
 
+; On for 1 second, off for 1 second x 10 seconds
+function beep_beep()
+    BeepState = 1
+    enable_timer0ovf
+    motor_on
+
+; On for 3 seconds
+function bee_eep()
+    BeepState = 2
+    enable_timer0ovf
+    motor_on  
 
 ascii_characters[] = {'a', 'b', ...}
 
+; Counts 1 second
+; Used for timing motor 'beeps'
+isr timer0ovf
+    TempCounter += 1
+    if TempCounter == 1000:            ; i.e. 1 second has passed
+        TempCounter = 0
+        SecondsCounter += 1
+        if BeepState == 1:            ; i.e. beep-beep sequence is in progress
+            if seconds_elapsed == 10:  ; i.e. sequence over
+                init_beeps()
+            else:
+                toggle_motor
+        if BeepState == 2:            ; i.e. bee-eep sequence is in progress
+            if seconds_elapsed == 3:
+                init_beeps()  
+    
 isr next_patient
 
 isr cancel_appointment
