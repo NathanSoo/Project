@@ -1,3 +1,5 @@
+P_SIZE = 10  ; Size of patient struct
+
 // initialise
 initialise_lcd()
 initialise_keypad()
@@ -77,7 +79,39 @@ function initialise_array(array, length)
         i--
 
 function keypad_to_ascii(last_key_pressed, times_key_pressed)
-    
+
+;----------------------
+; Queue functions
+;----------------------
+function get_queue_len()
+    return num_patients
+
+; Enqueues new patient.
+; Assigns pid and returns pointer to location of
+; new patient struct in data memory.
+function enqueue()
+    temp = previous_end
+    last_patient = temp + P_SIZE
+    last_patient.pid = temp.pid + 1
+    last_patient.name = read_name()        ; Reads name from temp_name variable in data memory
+    num_patients += 1
+
+    return last_patient                    ; Return address of newly enqueued patient in data memory
+
+; Dequeues first patient from queue and discards
+; Does not return any values.
+function dequeue()
+    num_patients -= 1
+    temp = previous_start
+    if is_empty:
+        reset_queue
+    else:
+        first_patient -= P_SIZE
+        clear_memory(temp)
+
+;----------------------
+; Motor functions
+;----------------------
 
 
 ascii_characters[] = {'a', 'b', ...}
