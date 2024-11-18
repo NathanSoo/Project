@@ -1,18 +1,18 @@
 <ASSEMBLER_INFO>
  <VERSION>2.2.8</VERSION>
  <DEVICE>"ATmega2560"</DEVICE>
- <WORKING_DIR>C:\Users\user\Documents\Project\Project_LCD\Debug</WORKING_DIR>
+ <WORKING_DIR>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\Debug</WORKING_DIR>
  <INCLUDE_PATH>
   <DIR>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc</DIR>
   <DIR>C:\Program Files (x86)\Atmel\Studio\7.0\toolchain\avr8\avrassembler\Include</DIR>
   <DIR></DIR>
  </INCLUDE_PATH>
- <SOURCE_FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</SOURCE_FILE>
+ <SOURCE_FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</SOURCE_FILE>
  <INCLUDED_FILES>
   <FILE>C:/Program Files (x86)\Atmel\Studio\7.0\Packs\atmel\ATmega_DFP\1.7.374\avrasm\inc\m2560def.inc</FILE>
  </INCLUDED_FILES>
  <OBJECT_FILES>
-  <FILE>C:\Users\user\Documents\Project\Project_LCD\Debug\Project_LCD.obj</FILE>
+  <FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\Debug\Project_LCD.obj</FILE>
  </OBJECT_FILES>
  <HEX_FILES>
   <FILE>Project_LCD.hex</FILE>
@@ -22,24 +22,22 @@
   <FILE>Project_LCD.lss</FILE>
  </OUTPUT_FILES>
  <LABELS>
-  <main><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>142</LINE></main>
-  <INITIALISE_LCD><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>180</LINE></INITIALISE_LCD>
-  <LCD_DISPLAY_MODE><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>247</LINE></LCD_DISPLAY_MODE>
-  <DISPLAY_BOTTOM_LEFT><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>304</LINE></DISPLAY_BOTTOM_LEFT>
-  <WRITE><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>554</LINE></WRITE>
-  <DISPLAY_NUMBER_RIGHT><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>333</LINE></DISPLAY_NUMBER_RIGHT>
-  <LCD_ENTRY_MODE><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>382</LINE></LCD_ENTRY_MODE>
-  <ENTRY_MESSAGE><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>435</LINE></ENTRY_MESSAGE>
-  <stop><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>176</LINE></stop>
-  <tens><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>355</LINE></tens>
-  <display><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>366</LINE></display>
-  <hundreds><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>362</LINE></hundreds>
-  <decimal_conversion><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>598</LINE></decimal_conversion>
-  <BACKSPACE><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>518</LINE></BACKSPACE>
-  <from_hundreds><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>622</LINE></from_hundreds>
-  <no_hundreds><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>630</LINE></no_hundreds>
-  <display_ones_digit><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>639</LINE></display_ones_digit>
-  <display_front_patient><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>658</LINE></display_front_patient>
-  <display_loop><FILE>C:\Users\user\Documents\Project\Project_LCD\main.asm</FILE><LINE>676</LINE></display_loop>
+  <main><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>140</LINE></main>
+  <INITIALISE_LCD><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>178</LINE></INITIALISE_LCD>
+  <LCD_DISPLAY_MODE><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>245</LINE></LCD_DISPLAY_MODE>
+  <DISPLAY_BOTTOM_LEFT><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>302</LINE></DISPLAY_BOTTOM_LEFT>
+  <WRITE><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>552</LINE></WRITE>
+  <DISPLAY_NUMBER_RIGHT><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>331</LINE></DISPLAY_NUMBER_RIGHT>
+  <LCD_ENTRY_MODE><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>380</LINE></LCD_ENTRY_MODE>
+  <ENTRY_MESSAGE><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>433</LINE></ENTRY_MESSAGE>
+  <stop><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>174</LINE></stop>
+  <tens><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>353</LINE></tens>
+  <display><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>364</LINE></display>
+  <hundreds><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>360</LINE></hundreds>
+  <decimal_conversion><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>596</LINE></decimal_conversion>
+  <BACKSPACE><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>516</LINE></BACKSPACE>
+  <from_hundreds><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>620</LINE></from_hundreds>
+  <no_hundreds><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>628</LINE></no_hundreds>
+  <display_ones_digit><FILE>C:\Users\Owen\Desktop\9032\Project_LCD\Project_LCD\main.asm</FILE><LINE>637</LINE></display_ones_digit>
  </LABELS>
 </ASSEMBLER_INFO>
