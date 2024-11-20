@@ -197,12 +197,12 @@ isr timer0ovf
 def INTIALISE_LCD()			            ; initialises LCD display
 def LCD_DISPLAY_MODE()		            ; clears the LCD display and sets it to display mode
 def DISPLAY_BOTTOM_LEFT()               ; moves the cursor to bottom left
-def DISPLAY_NUMBER_RIGHT()	            ; takes unsigned int as parameter in r19 and displays bottom right aligned number
+def DISPLAY_NUMBER_RIGHT(int i)	        ; takes unsigned binary int as parameter in r19 and displays in ASCII a decimal number with bottom-right alignment on LCD display
 def LCD_ENTRY_MODE()		            ; clears the LCD display and sets it to entry mode
-def ENTRY_MESSAGE()			            ; takes unsigned int as parameter in r19 and displays descriptive message showing patient number
+def ENTRY_MESSAGE(int i)			    ; takes unsigned binary int as parameter in r19 and displays a descriptive message showing patient number on LCD display
 def BACKSPACE()				            ; delete 1 char from patient input
 def WRITE(char c)			            ; write 1 char to LCD at current cursor position
-def DISPLAY_FRONT_PATIENT()	            ; peeks at the front of the queue and writes the patient name and pID to LCD display mode
+def DISPLAY_FRONT_PATIENT()	            ; peeks at the front of the queue and writes pID to LCD as bottom-right aligned ASCII decmial number and writes patient name to LCD bottom-left aligned
 
 ;----------------------
 ; Interrupt Service Routines
