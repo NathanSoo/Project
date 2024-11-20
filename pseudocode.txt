@@ -30,33 +30,47 @@ while true
     // read keypad entry
     if entry_mode is false and key_pressed == 'A'
         entry_mode = true
+        LCD_ENTRY_MODE()
+        DISPLAY_BOTTOM_LEFT()
     else
         if key_pressed == 'B' and new_name_cur > 0
             keypad_timer_stop()
             new_name_cur --
-            lcd_backspace_new_name()
+            new_name[new_name_cur] = 0
+            BACKSPACE()
 
             last_key_pressed = null
             times_key_pressed = 0
         else if key_pressed == 'C'
             keypad_timer_stop()
             new_name_cur = 0
-            lcd_clear_new_name()
+
+            initialise_array()
+            LCD_ENRTY_MODE()
+            DISPLAY_BOTTOM_LEFT()
 
             last_key_pressed = null
             times_key_pressed = 0
         else if key_pressed == 'D'
-            keypad_timer_stop()
-            queue_push(queue, new_name)
+            enqueue(new_name)
+            LCD_DISPLAY_MODE()
+            if num_patients() > 0
+                initialise_pb0(rising_edge)
+            
+            DISPLAY_FRONT_PATIENT()
 
-            new_name_cur = 0
+            keypad_timer_stop()
+
             initialise_array(new_name, 8)
+            new_name_cur = 0
             last_key_pressed = null
             times_key_pressed = 0
             entry_mode = false
         else if key_pressed == 'A'
             pass
-        else if key_pressed == '0'
+        else if key_pressed > 'C'
+            pass
+        else if key_pressed == '1'
             pass
         else if new_name_cur < 8
             keypad_timer_restart()
@@ -72,17 +86,25 @@ while true
                         times_key_pressed = 1
             else
                 new_name[new_name_cur] = keypad_to_ascii(last_key_pressed, times_key_pressed)
+                WRITE()
                 new_name_cur ++
                 last_key_pressed = key_pressed
                 times_key_pressed = 1
 
+; Fill array with 0s
 function initialise_array(array, length)
     i = 8
     while i > 0
         array[i] = 0
         i--
 
+; Get ascii value of letter from lookup table
+; The number/alphabet key pressed
+; The number of times the key has been pressed consecutively
 function keypad_to_ascii(last_key_pressed, times_key_pressed)
+
+; Poll keypad and return index of button pressed
+function scan_keypad()
 
 ;----------------------
 ; Queue functions
@@ -156,14 +178,54 @@ isr timer0ovf
         if BeepState == 2:            ; i.e. bee-eep sequence is in progress
             if seconds_elapsed == 3:
                 init_beeps()  
+
+pb0_state = 0
+pb1_state = 0
+which_pb = 0
+
+isr pb0_ih
+    if pb0_state == 0
+        initialise_pb1(rising_edge)
+        pb0_state = 1
+    else if pb0_state == 1
+        initialise_pb_timeout(1 second)
+        which_pb = 0
+
+        initialise_pb0(falling_edge)
+        pb0_state = 2
+    else if pb0_state == 2
+        disable_pb_timeout()
+        initialise_pb0(rising_edge)
+        pb0_state = 1
+
+isr pb1_ih
+    if pb1_state == 0
+        initialise_pb_timeout(1 second)
+        which_pb = 1
+
+        initialise_pb1(falling_edge)
+        pb1_state = 1
+    else if pb1_state == 1
+        disable_pb_timeout()
+        initialise_pb1(rising_edge)
+        pb1_state = 0
+
+isr pb_timeout
+    if which_pb == 0
+        init_beeps()
+    else if which_pb == 1
+        init_beeps()
+        bee_eep()
     
-isr next_patient
-
-isr cancel_appointment
-
-isr update_wait_time
-
-isr motor_stuff
+    dequeue()
+    LCD_DISPLAY_MODE()
+    DISPLAY_FRONT_PATIENT()
+    if num_patients() == 0
+        disable_pb0()
+    disable_pb1()
+    pb0_state = 0
+    pb1_state = 0
+    disable_pb_timeout()
 
 isr keypad_timeout
     disable_keypad_timer()

@@ -319,11 +319,11 @@ reset:
 	ldi		w, PORTBDIR
 	out		DDRB, w
 
-	ldi		w, null						; initialise last key pressed
+	ldi		w, null						; initialise last_key_pressed = null
 	mov		last_key_pressed, w
 
-	clr		times_key_pressed			; initialise times last key pressed
-	clr		entry_mode
+	clr		times_key_pressed			; initialise times_last_key_pressed = 0
+	clr		entry_mode					; initialise entry_mode = false
 
 	ldi		w, high(new_name)
 	mov		arg0, w
@@ -334,9 +334,9 @@ reset:
 	ldi		w, max_name
 	mov		arg2, w
 
-	rcall	initialise_array
+	rcall	initialise_array			; initialise new_name[8] = {0}
 
-	clr		new_name_cur
+	clr		new_name_cur				; initialise new_name_cur = 0
 	clr		is_timer_active
 
 	ldi		w, 0b00000000
@@ -356,7 +356,7 @@ reset:
 ; MAIN LOOP
 ;______________________________________________________________________
 loop:
-	rcall	scan_keypad					; poll until key is pressed then return key index in r24
+	rcall	scan_keypad						; poll until key is pressed then return key index in r24
 	mov		key_pressed, r24
 
 	sts		TCCR3B, zero
@@ -445,10 +445,10 @@ not_clear:
 	cp		key_pressed, w
 	brne	not_enter
 
-	rcall	enqueue
+	rcall	enqueue							; enqueue(new_name)
 	rcall	LCD_DISPLAY_MODE
 
-	; if its the first patient then push to display and enable pb0
+	; if its the first patient then enable pb0
 	ldi		zh, high(num_patients)
 	ldi		zl, low(num_patients)
 	ld		w, z
@@ -471,7 +471,7 @@ not_clear:
 	out		EIMSK, w
 
 not_first_patient:
-	rcall	display_front_patient
+	rcall	display_front_patient			; push to display
 
 	clr		is_timer_active					; keypad_timer_stop()
 	ldi		w, high(new_name)				; initialise_array(new_name, 8)
@@ -630,13 +630,6 @@ initialise_array:
 initialise_array_loop:
 	cp		r17, zero
 	breq	end_initialise_array_loop
-
-	;ld		r27, z
-	;cp		r27, zero
-	;breq	dont_write
-	;lcd_write_data
-	;lcd_wait_busy
-;dont_write:
 	st		z+, zero
 
 	dec		r17
@@ -1145,6 +1138,7 @@ timeout_pb0:
 	brne	timeout_pb1
  
 	; start led countdown
+	rcall init_beeps
 
 	rjmp	end_timeout_sel
 timeout_pb1:
