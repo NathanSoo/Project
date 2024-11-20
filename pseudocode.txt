@@ -1,7 +1,7 @@
 P_SIZE = 10  ; Size of patient struct
 BeepState    ; Stores which beep sequence the motor should be running, if any
 
-// initialise
+; initialise
 initialise_queue()
 initialise_motor()
 initialise_lcd()
@@ -9,7 +9,6 @@ initialise_keypad()
 initialise_buttons()
 initialise_other_pins()
 initialise_timer()
-
 
 entry_mode = false
 queue = new_queue()
@@ -24,15 +23,18 @@ times_key_pressed = 0
 keypad_timer_setup()
 
 while true
-    // poll keypad
+    ; poll keypad
     key_pressed = scan_keypad()
 
-    // read keypad entry
+    ; handle keypad entry
+
+    ; switch display mode to entry mode if A button is pressed
     if entry_mode is false and key_pressed == 'A'
         entry_mode = true
         LCD_ENTRY_MODE()
         DISPLAY_BOTTOM_LEFT()
     else
+        ; backspace patient's name
         if key_pressed == 'B' and new_name_cur > 0
             keypad_timer_stop()
             new_name_cur --
@@ -41,6 +43,8 @@ while true
 
             last_key_pressed = null
             times_key_pressed = 0
+        
+        ; clear new patient name
         else if key_pressed == 'C'
             keypad_timer_stop()
             new_name_cur = 0
@@ -51,6 +55,8 @@ while true
 
             last_key_pressed = null
             times_key_pressed = 0
+
+        ; enter new patient into queue
         else if key_pressed == 'D'
             enqueue(new_name)
             LCD_DISPLAY_MODE()
@@ -66,14 +72,20 @@ while true
             last_key_pressed = null
             times_key_pressed = 0
             entry_mode = false
+        
+        ; do nothing
         else if key_pressed == 'A'
             pass
         else if key_pressed > 'C'
             pass
         else if key_pressed == '1'
             pass
+
+        ; check if character limit is reached
         else if new_name_cur < 8
             keypad_timer_restart()
+
+            ; handle different cases of number/alphabet key presses
             if times_key_pressed == 0
                 last_key_pressed = key_pressed
                 times_key_pressed = 1
@@ -179,10 +191,27 @@ isr timer0ovf
             if seconds_elapsed == 3:
                 init_beeps()  
 
+;----------------------
+; LCD Functions
+;----------------------
+def INTIALISE_LCD()			            ; initialises LCD display
+def LCD_DISPLAY_MODE()		            ; clears the LCD display and sets it to display mode
+def DISPLAY_BOTTOM_LEFT()               ; moves the cursor to bottom left
+def DISPLAY_NUMBER_RIGHT()	            ; takes unsigned int as parameter in r19 and displays bottom right aligned number
+def LCD_ENTRY_MODE()		            ; clears the LCD display and sets it to entry mode
+def ENTRY_MESSAGE()			            ; takes unsigned int as parameter in r19 and displays descriptive message showing patient number
+def BACKSPACE()				            ; delete 1 char from patient input
+def WRITE(char c)			            ; write 1 char to LCD at current cursor position
+def DISPLAY_FRONT_PATIENT()	            ; peeks at the front of the queue and writes the patient name and pID to LCD display mode
+
+;----------------------
+; Interrupt Service Routines
+;----------------------
 pb0_state = 0
 pb1_state = 0
 which_pb = 0
 
+; handle next patient button
 isr pb0_ih
     if pb0_state == 0
         initialise_pb1(rising_edge)
@@ -198,6 +227,7 @@ isr pb0_ih
         initialise_pb0(rising_edge)
         pb0_state = 1
 
+; handle cancel patient button
 isr pb1_ih
     if pb1_state == 0
         initialise_pb_timeout(1 second)
@@ -210,6 +240,7 @@ isr pb1_ih
         initialise_pb1(rising_edge)
         pb1_state = 0
 
+; handle button hold down
 isr pb_timeout
     if which_pb == 0
         init_beeps()
@@ -227,6 +258,7 @@ isr pb_timeout
     pb1_state = 0
     disable_pb_timeout()
 
+; handle keypad timeout
 isr keypad_timeout
     disable_keypad_timer()
     new_name[new_name_cur] = keypad_to_ascii(last_key_pressed, times_key_pressed)
